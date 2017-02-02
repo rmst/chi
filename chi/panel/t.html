@@ -1,0 +1,35 @@
+
+
+
+
+<!DOCTYPE html>
+<html>
+<body>
+
+<p>Click the button to trigger a function that will output "Hello World" in a p element with id="demo".</p>
+
+<button onclick="myFunction()">Click me</button>
+<iframe id="ifr" src="http://localhost:8888/terminals/3"></iframe>
+
+<script type="text/javascript">
+	
+var iframe = document.getElementById('ifr');
+
+function myFunction() {
+  var evt = new Event('keypress');
+  evt.keyCode = '115';
+  iframe.contentDocument.body.dispatchEvent(evt);
+}
+
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+

@@ -1,0 +1,50 @@
+<head>
+  <link href="http://polygit.org/components/polymer/polymer.html" rel="import">
+  <link href="http://polygit.org/components/iron-ajax/iron-ajax.html" rel="import" >
+
+  <script src="http://polygit.org/components/webcomponentsjs/webcomponents-lite.min.js"></script>
+</head>
+
+<body>
+  <x-foo></x-foo>
+
+  <dom-module id="x-foo">
+    <template>
+      <iron-ajax id="ajax"
+                 auto
+                 url="/experiments"
+                 last-response="{{data}}"
+                 on-response="_onResponse"
+                 handleAs="json">
+      </iron-ajax>
+      <table>
+        <template is="dom-repeat" items="[[data]]">
+          <tr>
+            <td>[[item.id]]</td>
+            <td>[[item.name]]</td>
+            <td>[[item.email]]</td>
+          </tr>
+        </template>
+      </table>
+    </template>
+    <script>
+      HTMLImports.whenReady(function() {
+        Polymer({
+          is: 'x-foo',
+          _updateData: function() {
+            this.async(function() {
+              this.$.ajax.generateRequest();
+            }, 2000);
+          },
+          _onResponse: function() {
+            console.log('received response');
+            this._updateData();
+          }
+        });
+      });
+    </script>
+  </dom-module>
+</body>
+
+
+
