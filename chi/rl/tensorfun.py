@@ -1,10 +1,10 @@
-import tensorflow as tf
-import numpy as np
-# import types
-from contextlib import contextmanager
 import os.path as path
 import random
-from .logger import logger, logging
+from contextlib import contextmanager
+
+import tensorflow as tf
+
+from chi.logger import logger
 
 
 class GraphKeys:

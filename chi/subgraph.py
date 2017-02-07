@@ -4,14 +4,13 @@ import numpy as np
 from contextlib import contextmanager
 import os.path as path
 import random
-from ..logger import logger, logging
+from .logger import logger, logging
 from .util import signature
 import inspect
 
 from tensorflow.contrib import layers
 from tensorflow.contrib import framework as fw
 # fw.arg_scope
-logger.setLevel(logging.DEBUG)
 from . import chi
 from . import util
 
@@ -48,7 +47,8 @@ class SubGraph:
       v = getter(name, *args, **kwargs)
       return v
 
-    with tf.variable_scope(None, model.name, custom_getter=cg) as sc:
+    sc = None if model.built else model.variable_scope
+    with tf.variable_scope(sc, model.name, custom_getter=cg) as sc:
       self.variable_scope = sc
       f = model.f
 

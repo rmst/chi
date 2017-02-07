@@ -10,8 +10,9 @@ setup(name='chi',
       url='https://github.com/rmst/chi',
       download_url='',
       license='MIT',
-      install_requires=['tensorflow'],
+      install_requires=['tensorflow', 'matplotlib', 'flask'],
       extras_require={
           'gym': ['gym'],
       },
+      scripts=['bin/chiboard'],
       packages=find_packages())

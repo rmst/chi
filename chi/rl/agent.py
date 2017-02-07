@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-import gym
 import numpy as np
 import tensorflow as tf
-from .logger import logger
+
+from chi.logger import logger
 
 DEBUG = True
 

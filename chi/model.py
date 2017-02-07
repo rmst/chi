@@ -1,5 +1,5 @@
 import tensorflow as tf
-from ..logger import logger
+from .logger import logger
 from .subgraph import SubGraph
 
 
@@ -10,28 +10,34 @@ def model(*a, **kw):
     return lambda f: Model(f, *a, **kw)
 
 
-class Model(SubGraph):
+class Model(SubGraph):  # TODO: make this always represent the latest subgraph
   """produces SubGraphs
   """
+
   def __init__(self, f, reuse=None, optimizer=None, tracker=None):
     # chi._reg.append(self)  # register
     self.f = f
     self.logger = logger
     self.after_update = []
-    self.optimizer = optimizer
+    self.optimizer = optimizer or tf.train.AdamOptimizer()
     self.tracker = tracker
     self.tracker_active = False
     self.reuse = reuse or [tf.GraphKeys.GLOBAL_VARIABLES]
     self.name = f.__name__ if f.__name__ != '<lambda>' else 'lambda'
     self.built = False
 
+    with tf.variable_scope(None, self.name) as sc:
+      pass
+
+    self.variable_scope = sc
+
     # init SubGraph properties  # TODO: unhardcode this
     def exc(): raise Exception("{} has not yet been built".format(self.__class__.name))
-    self.variable_scope = self.output = property(exc)
+    self.output = property(exc)
 
   def __call__(self, *args, **kwargs):
     if not self.built:
-      super().__init__(self, args, kwargs)
+      super().__init__(self, args, kwargs)  # TODO: update subgaph on every call!
       self.built = True
       return self.output
     else:
@@ -48,7 +54,7 @@ class Model(SubGraph):
     sg = SubGraph(self, args, kwargs, gc)
     return sg.output
 
-  def minimize(self, loss, collections=None):
+  def minimize(self, loss, name=None, collections=None):
     assert isinstance(self.optimizer, tf.train.Optimizer)
     if not isinstance(loss, (list, tuple)):
       loss = [loss]
@@ -56,7 +62,7 @@ class Model(SubGraph):
       collections = [tf.GraphKeys.LOSSES, tf.GraphKeys.REGULARIZATION_LOSSES]
     loss += sum([self.get_collection(c) for c in collections], [])
     lossop = tf.add_n([tf.reduce_sum(l) for l in loss], 'loss')
-    tf.summary.scalar(lossop.name, lossop)
+    tf.summary.scalar(name or "loss", lossop)
     # tf.summary.scalar('{}/loss'.format(self.variable_scope.name), lossop)
     min = self.optimizer.minimize(lossop, var_list=self.trainable_variables())
     with tf.control_dependencies([min]):
@@ -64,7 +70,5 @@ class Model(SubGraph):
 
 
 def test_model():
-  @model
-  def f(a, b):
-    return a * b
+  pass
 

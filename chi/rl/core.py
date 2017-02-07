@@ -355,10 +355,9 @@ def mkdir(path):
 def copy(src, dst):
   if remote(dst):
     # Example call: scp -r foo your_username@remotehost.edu:/some/remote/directory/bar
-    print("Transfering files ...")
+    # print("Transfering files ...")
     subprocess.call(['rsync', '-r', src + '/', dst])  # scp / rsync
-  else:
-    rcopy(src, dst, symlinks=True, ignore='.*')
+
 
 
 def rcopy(src, dst, symlinks=False, ignore=None):

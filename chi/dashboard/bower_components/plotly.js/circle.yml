@@ -1,0 +1,32 @@
+general:
+  artifacts:
+      - "build/test_images/"
+      - "build/test_images_diff/"
+
+machine:
+  node:
+    version: 6.1.0
+  timezone:
+    America/Anchorage
+  services:
+    - docker
+
+dependencies:
+  pre:
+    - eval $(node tasks/docker.js pull)
+  post:
+    - eval $(node tasks/docker.js run)
+    - npm run cibuild
+    - npm run pretest
+    - eval $(node tasks/docker.js setup)
+    - npm prune && npm ls
+
+test:
+  override:
+    - npm run test-image
+    - npm run test-image-gl2d
+    - npm run test-export
+    - npm run citest-jasmine
+    - npm run test-bundle
+    - npm run test-syntax
+    - eslint .

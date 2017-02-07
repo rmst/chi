@@ -40,7 +40,7 @@ def free_port(port):
   import signal
   import subprocess
   import os
-  for lsof in ["lsof","/usr/sbin/lsof"]:
+  for lsof in ["lsof", "/usr/sbin/lsof"]:
     try:        
       out = subprocess.check_output([lsof,"-t","-i:"+str(port)])
       for l in out.splitlines():

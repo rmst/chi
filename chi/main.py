@@ -1,6 +1,6 @@
 import tensorflow as tf
-
 # TODO: make chi subclass of a SubModule (with "" scope)
+
 
 class ChiModule:
   def __init__(self):
@@ -18,4 +18,10 @@ class ChiModule:
     else:
       return default or self._sess
 
+  def __del__(self):
+    if self._sess:
+      self._sess.close()
+
 chi = ChiModule()
+
+

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="/bower_components/polymer/polymer.html" rel="import">
+  <link href="/bower_components/iron-ajax/iron-ajax.html" rel="import" >
+  <link href="/bower_components/paper-button/paper-button.html" rel="import" >
+  <link href="/bower_components/paper-icon-button/paper-icon-button.html" rel="import" >
+  <link href="/bower_components/paper-card/paper-card.html" rel="import" >
+  <link href="/bower_components/paper-toolbar/paper-toolbar.html" rel="import" >
+  <link rel="import" href="/bower_components/paper-header-panel/paper-header-panel.html">
+  <!-- <link href="/components/experiment-card.html" rel="import" > -->
+  <link rel="import" href="/bower_components/iron-icons/iron-icons.html">
+    <script src="/bower_components/jquery/jquery.min.js"></script>
+
+  <script src="/bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+  <style>
+  /*--primary-color: */
+  </style>
+  <link rel="import" href="bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+<!-- <style is="custom-style" include="iron-flex"></style> -->
+
+    <style>
+    html, body{
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #F0F0F0
+    }
+    
+
+
+  </style>
+
+
+</head>
+
+<body>
+
+
+
+    <!-- <div style="width:100%; height:64px"></div> -->
+
+    <x-foo></x-foo>
+
+
+
+  <dom-module id="x-foo">
+
+  <style include="iron-flex  iron-flex-alignment"></style>
+
+  	<style type="text/css">
+	  	:host{
+	  		/*padding-top: 64px;*/
+	  	};
+      .toolb{
+
+        --paper-toolbar-background: #01A35E;
+        --paper-toolbar-height: 50px;
+
+        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+            margin: 0;
+      padding: 0;
+        width:100%;
+      z-index: 10005;
+    /*position: fixed ;*/
+    left: 0px;
+    top: 0px;
+
+    }
+    .cont{
+      
+    }
+
+          .font{
+      font-size: 30px;
+      font-weight: normal;
+      text-decoration: none;
+      text-shadow: -.1px -.1px rgba(0,0,0,.1);
+      font: Roboto,sans-serif;
+      font-style: normal;
+      font-variant-ligatures: normal;
+      font-variant-caps: normal;
+      font-variant-numeric: normal;
+      font-weight: 400;
+      font-stretch: normal;
+      font-size: 30px;
+      font-family: Roboto, sans-serif;
+    }
+
+
+  	</style>
+    <template>
+
+      <iron-ajax id="ajax"
+                 auto
+                 url="/experiments"
+                 last-response="{{data}}"
+                 handleAs="json">
+      </iron-ajax>
+
+      <paper-header-panel mode="scroll">
+
+        <paper-toolbar class='toolb'>
+          <!--<paper-icon-button icon="menu" on-tap="menuAction"></paper-icon-button>-->
+          <div class="font">chi dashboard</div>
+          <!--<paper-icon-button icon="more-vert" on-tap="moreAction"></paper-icon-button>-->
+        </paper-toolbar> 
+
+        <div width=100% class="horizontal around-justified wrap layout cont">
+          <template is="dom-repeat" items="[[data]]" sort="_sort">
+            <ex-card item=[[item]]></ex-card>
+          </template>
+        </div>
+
+      </paper-header-panel>
+
+    </template>
+    <script>
+      HTMLImports.whenReady(function() {
+        Polymer({
+          is: 'x-foo',
+
+          _sort: function(a, b){
+             return a.t_creation > b.t_creation ? -1 : 1
+           },
+
+          ready: function(){
+            var ajax = this.$.ajax
+            setInterval(()=>{
+              ajax.generateRequest()
+            }, 2000)
+          },
+
+        });
+      });
+    </script>
+  </dom-module>
+
+
+  <dom-module id="ex-card">
+    <style include="iron-flex  iron-flex-alignment"></style>
+    <style>
+
+      .bar {
+        border-top: 1px solid rgba(0,0,0,.3);
+      }
+
+      .pending{
+        background-color: #FFC099
+      }
+      .running{
+        background-color: #B0F895
+      }
+      .dead{
+        background-color: #F0F0F0 
+      }
+      .box {
+        /*border: 1px solid #e8e8e8;*/
+/*        width: 900px;
+        height: 290px;
+        position: relative;
+        box-sizing: border-box;*/
+        /*display: inline-block;*/
+        overflow: hidden;
+        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+        border-radius: 2px;
+        margin: 5px;
+        padding:5px;
+
+      }
+      #trend{
+        width:900px;
+        height:240px;
+      }
+
+      #trend:hover{
+        background-color: rgba(255,255,255,.6)
+      }
+
+    </style>
+    <template>
+      <div class$="box layout vertical [[item.status]]">
+        <a href="/exp/#/[[item.hostid]][[item.path]]" target="_blank">
+<!--           <div><img  src="http://[[item.host]]:[[item.port]]/exp/local[[item.path]]/trend.png?[[item.rand]]"></div> -->
+<div><img id="trend" src="http://{{item.host}}:{{item.port}}/trend[[item.path]]?{{item.rand}}"></div>
+        </a>
+
+        <div class="layout horizontal bar">
+          <paper-button>[[item.name]]</paper-button>
+          <div class="flex"></div>
+          <paper-icon-button icon="delete" on-tap="_deleteExp"></paper-icon-button>
+        </div>
+      </div>
+    </template>
+    <script>
+    Polymer({
+      is: 'ex-card',
+
+      curl: function(host, port, path){
+        if(port != ''){
+          port = ':'+port
+        }
+        return 'http://' + host + port + path;
+      }, 
+
+      _deleteExp: function(){
+        item = this.item
+        url = this.curl(item.host, item.port, '/delete'+item.path)
+        console.log(url)
+        $.getJSON(url, response=>{
+        // console.log(response)
+        })
+      },
+
+      properties:{
+        item: Object
+      }
+    });
+    </script>
+  </dom-module>
+</body>
+</html>
+
+

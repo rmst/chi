@@ -1,0 +1,111 @@
+<!doctype html>
+<!--
+@license
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+    <title>plotly-plot Demo</title>
+    <script src="../../webcomponentsjs/webcomponents-lite.min.js"></script>
+    <link rel="import" href="../plotly-plot.html">
+  </head>
+  <body unresolved>
+
+    <p>Hard-coded plot example:</p>
+    <plotly-plot id="first-plot"
+      data='[
+        {
+          "x": [1, 2, 3, 4],
+          "y": [10, 15, 13, 17],
+          "mode": "markers",
+          "type": "scatter"
+        },
+        {
+          "x": [2, 3, 4, 5],
+          "y": [16, 5, 11, 9],
+          "mode": "lines",
+          "type": "scatter"
+        },
+        {
+          "x": [1, 2, 3, 4],
+          "y": [12, 9, 15, 12],
+          "mode": "lines+markers",
+          "type": "scatter"
+        }
+      ]'
+      layout='
+        {
+          "title":"Line and Scatter Plot",
+          "height": 400,
+          "width": 480
+        }
+      '
+    >
+    </plotly-plot>
+
+    <p>Second hard-coded plot example:</p>
+    <plotly-plot id="second-plot"
+      data='[
+        {
+          "x": [1, 2, 3, 4],
+          "y": [10, 15, 13, 17],
+          "mode": "markers",
+          "type": "scatter"
+        },
+        {
+          "x": [2, 3, 4, 5],
+          "y": [11, 17, 2, 4],
+          "mode": "lines",
+          "type": "scatter"
+        },
+        {
+          "x": [1, 2, 3, 4],
+          "y": [3, 4, 5, 6],
+          "mode": "lines+markers",
+          "type": "scatter"
+        }
+      ]'
+      layout='
+        {
+          "title":"Second Line and Scatter Plot",
+          "height": 400,
+          "width": 480
+        }
+      '
+    >
+    </plotly-plot>
+
+    <p>Dynamically set plot example:</p>
+    <plotly-plot id="third-plot"></plotly-plot>
+
+  </body>
+
+  <script>
+    (function () {
+      var plotEl = document.getElementById('third-plot');
+      plotEl.set('data', [
+        {
+          x: [1, 2, 3, 4],
+          y: [3, 4, 5, 6],
+          mode: 'lines+markers',
+          type: 'scatter'
+        }
+      ]);
+
+      plotEl.set('layout', {
+        title: 'Third Line and Scatter Plot',
+        height: 400,
+        width: 480
+      });
+
+      plotEl.set('data.0.y.2', 11);
+    })();
+  </script>
+</html>

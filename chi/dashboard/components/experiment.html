@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- <base href="/"> -->
+  <link href="/bower_components/polymer/polymer.html" rel="import">
+  <link href="/bower_components/iron-ajax/iron-ajax.html" rel="import" >
+  <link href="/bower_components/paper-toolbar/paper-toolbar.html" rel="import" >
+  <link rel="import" href="/bower_components/paper-header-panel/paper-header-panel.html">
+  <link href="/bower_components/paper-button/paper-button.html" rel="import" >
+  <link href="/bower_components/paper-card/paper-card.html" rel="import" >
+  <link href="/bower_components/app-route/app-route.html" rel="import" >
+  <link href="/components/experiment-card.html" rel="import" >
+  <link rel="import" href="/bower_components/iron-icons/iron-icons.html">
+  <script src="/bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+  <script src="/bower_components/jquery/jquery.min.js"></script>
+
+  <link rel="import" href="/bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+
+
+  <style>
+  html, body{
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+</style>
+</head>
+
+<body>
+
+  <experiment-page> </experiment-page>
+
+  <dom-module id="experiment-page">
+    <style type="text/css">
+      :host{
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      };
+
+      .bar {
+        border-top: 1px solid rgba(0,0,0,.3);
+      };
+
+      .pending{}
+      .running{
+        background-color: #0aa870
+      };
+      .dead{
+        background-color: rgb(230,230,230)
+      };
+      .box {
+        /*border: 1px solid #e8e8e8;*/
+        position: relative;
+        display: inline-block;
+        box-sizing: border-box;
+        overflow: hidden;
+        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+        border-radius: 2px;
+        margin: 3px;
+        padding:2px;
+
+
+
+      };
+      .toolb{
+        --paper-toolbar-height: 50px;
+        margin: 0;
+        padding: 0;
+        width:100%;
+        z-index: 10005;
+        position: fixed ;
+        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+        left: 0px;
+        top: 0px;
+      };
+
+          .font{
+      font-size: 30px;
+      font-weight: normal;
+      text-decoration: none;
+      text-shadow: -.1px -.1px rgba(0,0,0,.1);
+      font: Roboto,sans-serif;
+      font-style: normal;
+      font-variant-ligatures: normal;
+      font-variant-caps: normal;
+      font-variant-numeric: normal;
+      font-weight: 400;
+      font-stretch: normal;
+      font-size: 30px;
+      font-family: Roboto, sans-serif;
+      color: white;
+    }
+
+      iframe{
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+      };
+
+    </style>
+    <template>
+
+      <paper-toolbar class="toolb">
+        <!--<paper-icon-button icon="menu" on-tap="menuAction"></paper-icon-button>-->
+        <div class="font"><a class="font" href="/">chi dashboard</a></div>
+        <!--<paper-icon-button icon="more-vert" on-tap="moreAction"></paper-icon-button>-->
+      </paper-toolbar>
+      
+      <div style="height:40px"></div>
+      <iframe name="dudu" id="myiframe" src=""></iframe>
+
+    </template>
+    <script>
+
+
+
+
+      function curl(host, port, path){
+        port = window.location.port
+        if(port != ''){
+          port = ':'+port
+        }
+        return 'http://' + host + port + path
+      }
+
+
+
+      Polymer({
+        is: 'experiment-page',
+
+        properties: {
+
+
+        },
+
+        ready: function(){
+          
+          var frame = this.$.myiframe
+          frame._is_active = false
+          frame._source = ""
+
+          $('#myiframe').on('load', ()=>{
+            console.log('onload')
+            frame._is_active=true
+          })
+
+          var reload = ()=>{
+            console.log('reload')
+            if(i < 5 && !frame._is_active){
+              frame.src = frame.src  // reload
+            }
+          }
+
+          var req_tb = function(){ 
+            console.log('fdsfd')
+            url = '/tb/' + window.location.hash.split('/').slice(1).join('/')   
+            $.getJSON(url, data => {
+              console.log('got data')
+              src = 'http://'+data.host+':'+data.port
+              if(data.new || frame._source != src){
+                setTimeout(()=>{
+                  console.log('init load')
+                  frame.src = src
+                  frame._source = src
+                  frame._is_active = false         
+                  setTimeout(reload, 2000);
+                }, data.new ? 2000 : 0)
+              }
+          });
+          }
+
+          req_tb()
+          setInterval(req_tb, 5000);
+
+        },
+
+      });
+
+
+    </script>
+  </dom-module>
+
+</body>
+</html>
+
+

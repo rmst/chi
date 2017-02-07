@@ -1,0 +1,48 @@
+{
+  "name": "plotly-plot",
+  "authors": [
+    "Misha Wolfson <misha@ginkgobioworks.com>"
+  ],
+  "description": "A Polymer element providing an interface to the plotly.js library",
+  "keywords": [
+    "web-component",
+    "polymer",
+    "plotly",
+    "plotly.js",
+    "chart",
+    "plot",
+    "graph",
+    "graphing",
+    "plotting"
+  ],
+  "main": "plotly-plot.html",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/ginkgobioworks/plotly-plot.git"
+  },
+  "license": "http://polymer.github.io/LICENSE.txt",
+  "homepage": "https://ginkgobioworks.github.io/plotly-plot/",
+  "ignore": [
+    "/.*",
+    "/test/"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#^1.2.0",
+    "plotly.js": "^1.14.2"
+  },
+  "devDependencies": {
+    "iron-component-page": "PolymerElements/iron-component-page#^1.0.0",
+    "web-component-tester": "^4.0.0"
+  },
+  "version": "0.3.2",
+  "_release": "0.3.2",
+  "_resolution": {
+    "type": "version",
+    "tag": "v0.3.2",
+    "commit": "5ddf34ac954f16bd0e9bbf2d590f1051ffd8efcc"
+  },
+  "_source": "https://github.com/ginkgobioworks/plotly-plot.git",
+  "_target": "^0.3.2",
+  "_originalSource": "plotly-plot",
+  "_direct": true
+}

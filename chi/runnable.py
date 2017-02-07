@@ -4,7 +4,7 @@ from . import util
 from . import chi
 
 
-def runnable(f=None, logdir=None, smart_squeeze=True, *args, **kwargs):
+def function(f=None, logdir=None, smart_squeeze=True, *args, **kwargs):
   if f:  # use as function
     return Runnable(f, logdir, smart_squeeze, *args, **kwargs)
   else:  # use with @ as decorator
@@ -26,11 +26,14 @@ class Runnable(Model):
         p = tf.placeholder(dtype, shape, name)
       self.inputs.update({name: p})
 
-    self.output = super().__call__(**self.inputs)  # get subgraph
+    self.output = super().__call__(**self.inputs) # get subgraph
+
+    if self.output is None:
+      self.output = tf.no_op()
 
     # self.inputs = self.get_tensors_by_optype("Placeholder")
 
-    self.writer = tf.summary.FileWriter(logdir) if logdir else None
+    self.writer = tf.summary.FileWriter(logdir, graph=chi.get_session().graph) if logdir else None
     # collect summaries
     activations = self.get_tensors_by_optype('Relu')  # TODO: generalize to non-Relu
     # activations = self.subgraph.histogram_summaries(activations, 'activations')
@@ -98,7 +101,7 @@ class Runnable(Model):
 
 
 def test_runnable():
-  @runnable
+  @function
   def f(a, b):
     return a * b
 

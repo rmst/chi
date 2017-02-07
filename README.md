@@ -1,16 +1,12 @@
 # chi
 
-Install via
+#### Installation
 
 `pip install git+https://github.com/rmst/chi.git`
 
+In the `examples` folder is a small tutorial on chi's mechanics
+and also a more complicated Wasserstein GAN implementation.
 
+#### Run the dashboard via
 
-### chi.rl
-<table>
-  <tr>
-    <td><img src="./assets/ipend.gif?raw=true" width="200"></td>
-    <td><img src="./assets/reacher.gif?raw=true" width="200"></td>
-    <td><img src="./assets/pend.gif?raw=true" width="200"></td>
-  </tr>
-</table>
+`chiboard` or `./bin/chiboard`
