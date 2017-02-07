@@ -1,6 +1,6 @@
 legacy/
 */experimental/
-.idea
+.idea/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
