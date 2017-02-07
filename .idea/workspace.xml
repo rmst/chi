@@ -2,34 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="801cc16a-1a06-42f4-b38d-ecf45b31f667" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/chi/dashboard/main.py" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/examples/4 - wgan/wgan.py" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/chi/dashboard/index.html" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/chi/panel/g.sh" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/chi/panel/main.py" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/chi/panel/t.html" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/examples/wgan/wgan.py" afterPath="" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/chi/rl/logger.py" afterPath="$PROJECT_DIR$/chi/logger.py" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/examples/ddpg_continuous.py" afterPath="$PROJECT_DIR$/examples/experimental/ddpg_continuous.py" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/examples/ddpg_convolutional.py" afterPath="$PROJECT_DIR$/examples/experimental/ddpg_convolutional.py" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/examples/univtest.py" afterPath="$PROJECT_DIR$/examples/experimental/univtest.py" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/examples/wgan/assets/dcgan.png" afterPath="$PROJECT_DIR$/examples/4 - wgan/assets/dcgan.png" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/examples/wgan/assets/wgan.png" afterPath="$PROJECT_DIR$/examples/4 - wgan/assets/wgan.png" />
-      <change type="MOVED" beforePath="$PROJECT_DIR$/examples/wgan/readme.md" afterPath="$PROJECT_DIR$/examples/4 - wgan/readme.md" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.gitignore" afterPath="$PROJECT_DIR$/.gitignore" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/README.md" afterPath="$PROJECT_DIR$/README.md" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/__init__.py" afterPath="$PROJECT_DIR$/chi/__init__.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/main.py" afterPath="$PROJECT_DIR$/chi/main.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/model.py" afterPath="$PROJECT_DIR$/chi/model.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/rl/__init__.py" afterPath="$PROJECT_DIR$/chi/rl/__init__.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/rl/agent.py" afterPath="$PROJECT_DIR$/chi/rl/agent.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/rl/core.py" afterPath="$PROJECT_DIR$/chi/rl/core.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/rl/tensorfun.py" afterPath="$PROJECT_DIR$/chi/rl/tensorfun.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/rl/util.py" afterPath="$PROJECT_DIR$/chi/rl/util.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/runnable.py" afterPath="$PROJECT_DIR$/chi/runnable.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/subgraph.py" afterPath="$PROJECT_DIR$/chi/subgraph.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/chi/util.py" afterPath="$PROJECT_DIR$/chi/util.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/setup.py" afterPath="$PROJECT_DIR$/setup.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -80,7 +54,7 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="README.md" pinned="false" current-in-tab="true">
+      <file leaf-file-name="README.md" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/README.md">
           <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
             <state split_layout="SPLIT">
@@ -89,6 +63,16 @@
                 <folding />
               </first_editor>
               <second_editor />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name=".gitignore" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/.gitignore">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="54">
+              <caret line="3" column="0" lean-forward="true" selection-start-line="3" selection-start-column="0" selection-end-line="3" selection-end-column="0" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -192,7 +176,6 @@
         <option value="$PROJECT_DIR$/setup.py" />
         <option value="$PROJECT_DIR$/chi/dashboard/__init__.py" />
         <option value="$PROJECT_DIR$/chi/bla.py" />
-        <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/examples/simple_experiment.py" />
         <option value="$PROJECT_DIR$/chi/main.py" />
         <option value="$PROJECT_DIR$/chi/dashboard/main.py" />
@@ -211,6 +194,7 @@
         <option value="$PROJECT_DIR$/examples/2-models.py" />
         <option value="$PROJECT_DIR$/examples/wgan/wgan.py" />
         <option value="$PROJECT_DIR$/README.md" />
+        <option value="$PROJECT_DIR$/.gitignore" />
       </list>
     </option>
   </component>
@@ -821,14 +805,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/.gitignore">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="324">
-          <caret line="18" column="5" lean-forward="true" selection-start-line="18" selection-start-column="5" selection-end-line="18" selection-end-column="5" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/chi/dashboard/main.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
@@ -1031,6 +1007,14 @@
             <folding />
           </first_editor>
           <second_editor />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/.gitignore">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="54">
+          <caret line="3" column="0" lean-forward="true" selection-start-line="3" selection-start-column="0" selection-end-line="3" selection-end-column="0" />
+          <folding />
         </state>
       </provider>
     </entry>
