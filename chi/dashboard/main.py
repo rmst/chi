@@ -6,7 +6,6 @@ from chi.dashboard.server import get_free_port, Server
 import requests
 import socket
 from chi.logger import logger
-from chi.logger import setLogLevel
 
 
 import os
@@ -14,7 +13,7 @@ import os
 
 @chi.app
 def dashboard(host='127.0.0.1', port=5000, loglevel='debug'):
-  setLogLevel(loglevel)
+  chi.set_loglevel(loglevel)
   p = os.path.dirname(os.path.realpath(__file__))
   app = Flask(__name__, root_path=p, static_url_path='/')
 

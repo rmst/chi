@@ -3,13 +3,15 @@ This is how we can use python functions to define and
 scope TensorFlow models
 """
 import tensorflow as tf
-from chi import function, model
+import chi
 import numpy as np
 
 from tensorflow.contrib import layers  # Keras-style layers
 
+chi.set_loglevel('debug')
 
-@model
+
+@chi.model
 def my_model(x: (32, 2)):
   z = layers.fully_connected(x, 100, tf.nn.relu)
   y = layers.fully_connected(z, 1, None)
@@ -17,7 +19,7 @@ def my_model(x: (32, 2)):
   return y
 
 
-@function
+@chi.function
 def compute_forward(x):
   y = my_model(x)
   return y
@@ -25,12 +27,12 @@ def compute_forward(x):
 # now that the model has been used once and
 # its internal variables hav been created we can get
 
-print(my_model.trainable_variables())
-print(my_model.summaries())  # TODO: this should output something :P
+print('\n'.join([v.name for v in my_model.trainable_variables()]))
+print(my_model.summaries())
 
 
 # we can also use it again, parameters are automatically shared
-@function
+@chi.function
 def train(x, targets):
   y = my_model(x)
   loss = tf.square(y-targets)  # Mean Squared Error

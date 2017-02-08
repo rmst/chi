@@ -13,16 +13,20 @@ import atexit
 import signal
 import chi
 
+
 def app(f=None):
   return App(f)
 
 
 def experiment(f=None, local_dependencies=None):
-  return BatchJob(f, local_dependencies) if f else lambda f: BatchJob(f, local_dependencies)
+  return Experiment(f, local_dependencies) if f else lambda f: Experiment(f, local_dependencies)
 
 
 class App:
+  current_app = None  # TODO: make this work with multiple apps in one program (consider multithreading)
+
   def __init__(self, f: callable, extra_args=None):
+    App.current_app = self
     self.f = f
     extra_args = extra_args or {}
 
@@ -66,7 +70,7 @@ class App:
     pass
 
 
-class BatchJob(App):
+class Experiment(App):
   def __init__(self, f, local_dependencies=None):
     self.f = f
     self.local_dependencies = local_dependencies or []
@@ -90,9 +94,13 @@ class BatchJob(App):
 
     else:
       logdir = args.get("logdir")
+
       if not logdir:
         # no output, do nothing here
         return args
+
+      if logdir.endswith('/'):
+        logdir = logdir[:-1]
 
       logdir = expanduser(logdir)
       if logdir[-1] == '+':  # automatic naming

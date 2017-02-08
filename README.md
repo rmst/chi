@@ -2,11 +2,14 @@
 
 #### Installation
 
+Requires TensorFlow and Python 3
+
 `pip install git+https://github.com/rmst/chi.git`
 
-In the `examples` folder is a small tutorial on chi's mechanics
-and also a more complicated Wasserstein GAN implementation.
+The scripts in the `examples` folder demonstrate the core features
+of chi. The `examples/4-wgan/` folder contains an implementation
+of the new Wasserstein GAN.
 
-#### Run the dashboard via
+##### Run the dashboard via
 
-`chiboard` or `./bin/chiboard`
+`chiboard` or `bin/chiboard`

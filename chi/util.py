@@ -19,50 +19,25 @@ def ClippingOptimizer(opt: tf.train.Optimizer, low, high):
   return opt
 
 
-
-def smart_expand(x, p: tf.Tensor):
-  x = np.array(x)
-  if p.get_shape().is_compatible_with(x.shape):
-    return x, False
-  xe = x[np.newaxis, ...]  # add batch dimension
-  if p.get_shape().is_compatible_with(xe.shape):
-    return xe, True
-  else:
-    return x, False  # let tf raise the exception
-
-
-def smart_squeeze(x: np.ndarray):
-  if len(x.shape) > 0 and x.shape[0] == 1:
-    return x[0, ...]  # remove batch dimension
-  else:
-    return x
-
-
 def type_and_shape_from_annotation(an):
-  if isinstance(an, type):
-    return tf.as_dtype(an), None
+  if isinstance(an, tf.DType):
+    return tf.as_dtype(an), None  # e.g.: myfun(x: float)
   elif isinstance(an, collections.Iterable):
-    if isinstance(an[0], type):
-      return an[0], an[1]
+    if isinstance(an[0], tf.DType):
+      shape = shape_from_annotation(an[1])
+      return tf.as_dtype(an[0]), shape  # e.g.: myfun(x: [float, (3, 5)])
     else:
-      return tf.float32, an  # just shape
+      shape = shape_from_annotation(an)
+      return tf.float32, shape  # e.g.: myfun(x: (3, 5))
   else:
     raise ValueError('Can not interpret annotation')
 
 
-def signature(f):
-  sig = inspect.signature(f)
-  out = []
-  for n, v in sig.parameters.items():
-    if not v.default == inspect.Parameter.empty:
-      t = tf.convert_to_tensor(v.default)
-      out.append((n, t.dtype, t.get_shape(), v.default))
-    elif not v.annotation == inspect.Parameter.empty:
-      out.append((n, *type_and_shape_from_annotation(v.annotation), None))
-    else:
-      out.append((n, tf.float32, None, None))
-
-  return out
+def shape_from_annotation(an: collections.Iterable):
+  if isinstance(an[0], collections.Iterable):
+    return [None, *an[0]]  # e.g.: myfun(x: [[3, 5]])  # will be used for automatic batch dimension
+  else:
+    return tuple(an)  # e.g.: myfun(x: (3, 5))  # return as tuple
 
 
 # LEGACY:

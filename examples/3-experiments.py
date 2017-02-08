@@ -15,3 +15,10 @@ def my_experiment(logdir='~/chi-results/+'):
   for i in range(10000):
     my_function(i)
     time.sleep(.01)
+
+
+# you can watch all your running experiments with chiboard
+# if the experiment page doesn't load try to refresh the site
+
+# you can also call this script from the terminal now, try:
+# python ./3-experiments.py -h

@@ -19,7 +19,7 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
-def setLogLevel(level: str):
+def set_loglevel(level: str):
   l = getattr(logging, level.upper())
   logger.setLevel(l)
 
