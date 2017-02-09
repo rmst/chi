@@ -6,19 +6,33 @@ from chi.dashboard.server import get_free_port, Server
 import requests
 import socket
 from chi.logger import logger
-
+from chi.dashboard import port2pid
 
 import os
+import signal
 
 
 @chi.app
 def dashboard(host='127.0.0.1', port=5000, loglevel='debug'):
   chi.set_loglevel(loglevel)
-  p = os.path.dirname(os.path.realpath(__file__))
-  app = Flask(__name__, root_path=p, static_url_path='/')
 
   if port == 0:
     port = get_free_port(host)
+  else:
+    solo = False
+    while not solo:
+      pid = port2pid(port)
+      if pid:
+        os.kill(pid[0], signal.SIGTERM)
+        logger.info('restarting chiboard')
+      else:
+        solo = True
+      # TODO: timeout
+
+  p = os.path.dirname(os.path.realpath(__file__))
+  app = Flask(__name__, root_path=p, static_url_path='/')
+
+
   server = Server(host, port)
 
   remotes = {}  # spin up all ssh servers in a config

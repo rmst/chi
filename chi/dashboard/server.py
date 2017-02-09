@@ -17,7 +17,8 @@ import subprocess
 import socket
 from threading import Thread
 from chi.logger import logger
-
+import requests
+from chi.dashboard import repeat_until
 # local schema: http://<host>:<port>/exp/local/<path>/
 # remote schema: ... /exp/ssh/<num>/<path>/
 
@@ -116,26 +117,39 @@ class Exp:
 
   def tensorboard(self):
     if not self.tb:
-      self.tb_port = get_free_port(self.host)
+      self.tb_port = get_free_port(self.host)  # TODO: use self.host here?
       cmds = ['tensorboard', '--logdir', "{}".format(self.path), '--host', '0.0.0.0', '--port', str(self.tb_port)]
       print(' '.join(cmds))
       self.tb = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+      Thread(target=self.tb_watcher, daemon=True).start()
+
+      @repeat_until(timeout=3.)
+      def check_tb():
+        try:
+          url = "http://{}:{}".format(self.host, self.tb_port)
+          r = requests.get(url)  # requests.head not supported by tensorboard
+          available = r.status_code == 200
+          sleep(.3)
+          logger.debug('tb on {} status {}, {}'.format(url, r.status_code, r.reason))
+          return available
+        except requests.ConnectionError:
+          return False
+
+      if not check_tb:
+        logger.warning('tb could not be started')
+
       self.tb_t = time()
       Thread(target=self.tb_killer, daemon=True).start()
-      Thread(target=self.tb_watcher, daemon=True).start()
-      return dict(host=self.host, port=self.tb_port, new=True)
+      return dict(host=self.host, port=self.tb_port, new=True, available=check_tb)
 
     else:
       self.tb_t = time()  # heartbeat
       # print('heartbeat')
-      return dict(host=self.host, port=self.tb_port, new=False)
+      return dict(host=self.host, port=self.tb_port, new=False, available=True)
 
   def tb_watcher(self):
-    print('watcher start')
     assert isinstance(self.tb, subprocess.Popen)
-    print('1')
     outs, errs = self.tb.communicate()
-    print('2')
     returncode = self.tb.returncode
     self.tb = None
     msg = 'tensorboard on {} for {} returned with code {}'.format(self.tb_port, self.path, returncode)
@@ -143,21 +157,20 @@ class Exp:
       logger.debug(msg)
     else:
       logger.warning(msg)
-      logger.warning(outs)
-      logger.warning(errs)
+      logger.warning('out: '+outs)
+      logger.warning('err: '+errs)
     print('watcher finish')
 
   def tb_killer(self):
     tb = self.tb
-    while not tb.poll():
+    while tb and not tb.poll():
       if time() - self.tb_t > 60:
-        print("killer")
         assert isinstance(tb, subprocess.Popen)
         tb.terminate()
         logger.debug('tensorboard for {} kill because timeout'.format(self.path))
         # break
       sleep(5)
-    print('killer finish')
+    logger.debug('killer finish')
 
   def rm(self):
     # print('rm')
@@ -175,7 +188,7 @@ class Exp:
 
     self.plot_t = time() + 2 * random.random()
     f, ax = plt.subplots()
-    f.set_size_inches((15, 4))
+    f.set_size_inches((14, 4))
     f.set_tight_layout(True)
     name, x = self.trend_data(['dashboard', 'loss', 'return'])
     pl, = ax.plot(x[:, 0], x[:, 1])

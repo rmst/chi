@@ -143,8 +143,7 @@
         ready: function(){
           
           var frame = this.$.myiframe
-          frame._is_active = false
-          frame._source = ""
+          frame._empty = true
 
           $('#myiframe').on('load', ()=>{
             console.log('onload')
@@ -159,20 +158,23 @@
           }
 
           var req_tb = function(){ 
-            console.log('fdsfd')
             url = '/tb/' + window.location.hash.split('/').slice(1).join('/')   
             $.getJSON(url, data => {
               console.log('got data')
               src = 'http://'+data.host+':'+data.port
-              if(data.new || frame._source != src){
-                setTimeout(()=>{
-                  console.log('init load')
-                  frame.src = src
-                  frame._source = src
-                  frame._is_active = false         
-                  setTimeout(reload, 2000);
-                }, data.new ? 2000 : 0)
+              if(frame._empty || data.new){
+                frame.src = src
+                frame._empty = false
               }
+              // if(data.new || frame._source != src){
+              //   setTimeout(()=>{
+              //     console.log('init load')
+              //     frame.src = src
+              //     frame._source = src
+              //     frame._is_active = false         
+              //     setTimeout(reload, 2000);
+              //   }, data.new ? 2000 : 0)
+              // }
           });
           }
 

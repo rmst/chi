@@ -21,4 +21,4 @@ def my_experiment(logdir='~/chi-results/+'):
 # if the experiment page doesn't load try to refresh the site
 
 # you can also call this script from the terminal now, try:
-# python ./3-experiments.py -h
+# python ./c_experiments.py -h

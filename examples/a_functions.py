@@ -37,7 +37,7 @@ def my_tf_fun(x: [[3]], y):  # [shape] activates auto wrap
 assert np.all(my_tf_fun(np.zeros([32, 3]), 5) == np.zeros([32, 3]))  # with batch dimension
 assert np.all(my_tf_fun(np.zeros([3]), 5) == np.zeros([3]))  # without batch dimension
 
-# chi.function also helps with logging see 3-experiments.py for that
+# chi.function also helps with logging see c_experiments.py for that
 
 
 # Btw.: these @ decorators are just a shortcut for:

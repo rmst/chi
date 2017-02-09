@@ -4,6 +4,19 @@ import subprocess
 import os
 
 
+def repeat_until(timeout):
+  from time import time
+
+  def wrap(f):
+    start = time()
+    while True:
+      success = f()
+      if success:
+        return True
+      elif success == -1 or time()-start > timeout:
+        return False
+  return wrap
+
 def port2pid(port):
   pids = []
   for lsof in ["lsof", "/usr/sbin/lsof"]:

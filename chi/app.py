@@ -102,6 +102,9 @@ class Experiment(App):
       if logdir.endswith('/'):
         logdir = logdir[:-1]
 
+      if logdir == '+':
+        logdir = '~/.chi/experiments/+'
+
       logdir = expanduser(logdir)
       if logdir[-1] == '+':  # automatic naming
         dstr = datetime.now().strftime('%Y%m%d_%H%M_%S')

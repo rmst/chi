@@ -4,7 +4,8 @@ from . import util
 import chi
 import inspect
 import numpy as np
-
+from chi.logger import logger
+import os
 
 def function(f=None, logdir=None, *args, **kwargs):
   if f:  # use as function
@@ -60,10 +61,15 @@ class Function(Model):
     # self.inputs = self.get_tensors_by_optype("Placeholder")
 
     if logdir:
-      ca = chi.App.current_app
+      current_app = chi.App.current_app
       if not logdir.startswith('/'):
-        assert isinstance(ca, chi.Experiment) and ca.logdir
-        logdir = ca.logdir+'/'+logdir
+        logger.debug('logdir path relative to app: {}, app logdir: {}'.format(current_app, current_app.logdir))
+        if current_app and current_app.logdir:
+
+          logdir = current_app.logdir+'/'+logdir
+        else:
+          logger.debug('fall back to logdir path relative to working dir')
+          os.path.abspath('./'+logdir)
 
       self.writer = tf.summary.FileWriter(logdir, graph=chi.chi.get_session().graph)
     else:
