@@ -69,7 +69,14 @@
 
     }
     .cont{
-      
+        display: flex;
+  /*align-items: stretch;*/
+  flex-flow: row wrap;
+
+flex-flow: center
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
     }
 
           .font{
@@ -87,7 +94,13 @@
       font-size: 30px;
       font-family: Roboto, sans-serif;
     }
-
+.filler {
+  flex: 1;
+  min-width: 500px;
+  height:0px;
+  margin: 5px;
+  
+}
 
   	</style>
     <template>
@@ -107,11 +120,22 @@
           <!--<paper-icon-button icon="more-vert" on-tap="moreAction"></paper-icon-button>-->
         </paper-toolbar> 
 
-        <div width=100% class="horizontal around-justified wrap layout cont">
+        <div width=100% class="cont">
+
+
           <template is="dom-repeat" items="[[data]]" sort="_sort">
             <ex-card item=[[item]]></ex-card>
           </template>
+
+          <div class="filler"></div>
+          <div class="filler"></div>
+          <div class="filler"></div>
+          <div class="filler"></div>
+          <div class="filler"></div>
+
         </div>
+
+        
 
       </paper-header-panel>
 
@@ -141,6 +165,14 @@
   <dom-module id="ex-card">
     <style include="iron-flex  iron-flex-alignment"></style>
     <style>
+      :host{
+        flex: 1;
+        min-width: 500px;
+        overflow: hidden;
+        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+        margin: 5px;
+
+      }
 
       .bar {
         border-top: 1px solid rgba(0,0,0,.3);
@@ -162,28 +194,36 @@
         position: relative;
         box-sizing: border-box;*/
         /*display: inline-block;*/
+        /*display: flex;*/
+        /*flex: 1;*/
+        /*width: 100%;*/
+ /*       min-width: 500px;
         overflow: hidden;
-        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
-        border-radius: 2px;
-        margin: 5px;
-        padding:5px;
+        box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);*/
+        /*border-radius: 2px;*/
+        /*margin: 5px;*/
+        /*padding:5px;*/
 
       }
+
+      .box a{
+        /*width: 100%;*/
+      }
       #trend{
-        width:900px;
-        height:240px;
+        width: 100%;
+        /*width:900px;*/
+        /*height:240px;*/
       }
 
       #trend:hover{
-        background-color: rgba(255,255,255,.6)
+        background-color: rgba(255,255,255,.9)
       }
 
     </style>
     <template>
-      <div class$="box layout vertical [[item.status]]">
+      <div class$="layout vertical [[item.status]]">
         <a href="/exp/#/[[item.hostid]][[item.path]]" target="_blank">
-<!--           <div><img  src="http://[[item.host]]:[[item.port]]/exp/local[[item.path]]/trend.png?[[item.rand]]"></div> -->
-<div><img id="trend" src="http://{{item.host}}:{{item.port}}/trend[[item.path]]?{{item.rand}}"></div>
+        <img id="trend" src="http://{{item.host}}:{{item.port}}/trend[[item.path]]?{{item.rand}}">
         </a>
 
         <div class="layout horizontal bar">
@@ -206,6 +246,8 @@
 
       _deleteExp: function(){
         item = this.item
+        // Polymer.dom(this.root).style.display = 'none'
+        this.style.display = 'none'
         url = this.curl(item.host, item.port, '/delete'+item.path)
         console.log(url)
         $.getJSON(url, response=>{
@@ -214,8 +256,13 @@
       },
 
       properties:{
-        item: Object
-      }
+        item: Object, 
+        disp:{
+          type: Boolean,
+          value: true,
+        },
+      },
+
     });
     </script>
   </dom-module>

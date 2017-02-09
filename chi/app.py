@@ -81,7 +81,7 @@ class Experiment(App):
     extra_args = {"logdir": (None, None),
                   "confdir": (None, None)}
 
-    super().__init__(f, extra_args)
+    App.__init__(self, f, extra_args)
 
   def filter_arguments(self, args: dict):
     confdir = args.get("confdir")

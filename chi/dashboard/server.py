@@ -188,7 +188,7 @@ class Exp:
 
     self.plot_t = time() + 2 * random.random()
     f, ax = plt.subplots()
-    f.set_size_inches((14, 4))
+    f.set_size_inches((8, 2.5))
     f.set_tight_layout(True)
     name, x = self.trend_data(['dashboard', 'loss', 'return'])
     pl, = ax.plot(x[:, 0], x[:, 1])
@@ -196,7 +196,7 @@ class Exp:
     f.legend([pl], [name])
     # ax.plot(i,r)
     sio = io.BytesIO()
-    f.savefig(sio, format='png', dpi=60, transparent=True)
+    f.savefig(sio, format='png', dpi=100, transparent=True)
 
     self.plot_cache = sio.getvalue()
     sio.seek(0)

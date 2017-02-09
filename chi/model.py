@@ -12,7 +12,7 @@ def model(*a, **kw):
     return lambda f: Model(f, *a, **kw)
 
 
-class Model(SubGraph):  # TODO: make this always represent the latest subgraph
+class Model(SubGraph):
   """produces SubGraphs
   """
 
