@@ -61,12 +61,13 @@ class Function(Model):
     # self.inputs = self.get_tensors_by_optype("Placeholder")
 
     if logdir:
-      current_app = chi.App.current_app
+      current_exp = chi.Experiment.current_exp
       if not logdir.startswith('/'):
-        logger.debug('logdir path relative to app: {}, app logdir: {}'.format(current_app, current_app.logdir))
-        if current_app and current_app.logdir:
+        logger.debug('logdir path relative to exp: {}'.format(current_exp))
+        logger.debug('... with logdir {}'.format(current_exp.logdir))
+        if current_exp and current_exp.logdir:
 
-          logdir = current_app.logdir+'/'+logdir
+          logdir = os.path.join(current_exp.logdir, logdir)
         else:
           logger.debug('fall back to logdir path relative to working dir')
           os.path.abspath('./'+logdir)

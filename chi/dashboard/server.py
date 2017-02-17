@@ -119,7 +119,7 @@ class Exp:
     if not self.tb:
       self.tb_port = get_free_port(self.host)  # TODO: use self.host here?
       cmds = ['tensorboard', '--logdir', "{}".format(self.path), '--host', '0.0.0.0', '--port', str(self.tb_port)]
-      print(' '.join(cmds))
+      logger.debug('Start tensorboard with: ' + ' '.join(cmds))
       self.tb = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
       Thread(target=self.tb_watcher, daemon=True).start()
 

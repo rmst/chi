@@ -2,7 +2,7 @@
 from flask import Flask, Response, jsonify, send_from_directory, send_file
 import flask
 import chi
-from chi.dashboard.server import get_free_port, Server
+from chi.dashboard.server import get_free_port, Server, rcollect
 import requests
 import socket
 from chi.logger import logger
@@ -61,6 +61,18 @@ def dashboard(host='127.0.0.1', port=5000, loglevel='debug'):
       raise Exception('Remote not yet supported')
       # request remote info
       # update urls
+
+  @app.route("/logs/<path:path>")
+  def logs(path):
+    data = []
+    for p in rcollect('/'+path+'/chi-logs', 0):
+      with open(p, 'r') as f:
+        c = f.read()
+        # c = c.replace('\n', '<br>')
+        c = c.replace('<', '&lt;')
+        data.append({'name': os.path.basename(p), 'content': c})
+
+    return jsonify(data)
 
   @app.route("/tb/<string:host>/<path:path>")
   def tb(host, path):

@@ -10,3 +10,8 @@
 - remote via ssh
 
 
+
+### style
+- favicon
+- chiboard document titles
+

@@ -8,7 +8,7 @@ import time
 @chi.experiment
 def my_experiment(logdir='~/chi-results/+'):
 
-  @chi.function(logdir=logdir)
+  @chi.function(logdir='bla')
   def my_function(i):
     tf.summary.scalar('some_loss', i + tf.random_normal([], stddev=i**.5))
 

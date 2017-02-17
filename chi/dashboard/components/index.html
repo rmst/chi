@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>chiboard</title>
   <link href="/bower_components/polymer/polymer.html" rel="import">
   <link href="/bower_components/iron-ajax/iron-ajax.html" rel="import" >
   <link href="/bower_components/paper-button/paper-button.html" rel="import" >
@@ -116,15 +117,15 @@ flex-flow: center
 
         <paper-toolbar class='toolb'>
           <!--<paper-icon-button icon="menu" on-tap="menuAction"></paper-icon-button>-->
-          <div class="font">chi dashboard</div>
+          <div class="font">chiboard</div>
           <!--<paper-icon-button icon="more-vert" on-tap="moreAction"></paper-icon-button>-->
         </paper-toolbar> 
 
         <div width=100% class="cont">
 
 
-          <template is="dom-repeat" items="[[data]]" sort="_sort">
-            <ex-card item=[[item]]></ex-card>
+          <template is="dom-repeat" items="{{data}}" sort="_sort">
+            <ex-card item={{item}}></ex-card>
           </template>
 
           <div class="filler"></div>
@@ -146,7 +147,12 @@ flex-flow: center
           is: 'x-foo',
 
           _sort: function(a, b){
-             return a.t_creation > b.t_creation ? -1 : 1
+            ad = a.deleted || false
+            bd = b.deleted || false  
+            if(ad ? !bd : bd)
+              return ad ? -1 : 1
+            else
+              return a.t_creation > b.t_creation ? -1 : 1
            },
 
           ready: function(){
@@ -187,6 +193,11 @@ flex-flow: center
       .dead{
         background-color: #F0F0F0 
       }
+
+      .deleted{
+        background-color: black
+      }
+
       .box {
         /*border: 1px solid #e8e8e8;*/
 /*        width: 900px;
@@ -237,6 +248,10 @@ flex-flow: center
     Polymer({
       is: 'ex-card',
 
+      ready: function(){
+        
+      },
+
       curl: function(host, port, path){
         if(port != ''){
           port = ':'+port
@@ -246,10 +261,12 @@ flex-flow: center
 
       _deleteExp: function(){
         item = this.item
-        // Polymer.dom(this.root).style.display = 'none'
-        this.style.display = 'none'
         url = this.curl(item.host, item.port, '/delete'+item.path)
+        this.item.deleted = true
+        this.item.status = 'deleted'
+        this.item = this.item
         console.log(url)
+
         $.getJSON(url, response=>{
         // console.log(response)
         })

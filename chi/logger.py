@@ -1,6 +1,10 @@
 import logging
+import sys
+
 
 # create logger with 'spam_application'
+from contextlib import contextmanager
+
 logger = logging.getLogger('chi')
 logger.propagate = False
 logger.setLevel(logging.INFO)
@@ -23,8 +27,39 @@ def set_loglevel(level: str):
   l = getattr(logging, level.upper())
   logger.setLevel(l)
 
+
+class StdLogger:
+  def __init__(self, file, terminal):
+    self.terminal = terminal
+    self.log = file
+
+  def write(self, message):
+    self.terminal.write(message)
+    self.log.write(message)
+
+  def flush(self):
+    self.log.flush()
+    pass
+
+
+@contextmanager
+def capture_std(filename):
+  logfile = open(filename, "a")
+  a = StdLogger(logfile, sys.stdout)
+  b = StdLogger(logfile, sys.stderr)
+  sys.stdout = a
+  sys.stderr = b
+
+  yield
+
+  sys.stderr = b.terminal
+  sys.stdout = a.terminal
+  logfile.close()
+
+
+
+
+
 if __name__ == "__main__":
   logger.info('info')
   logger.debug('debug')
-
-
