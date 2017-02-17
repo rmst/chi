@@ -13,7 +13,7 @@ import signal
 
 
 @chi.app
-def dashboard(host='127.0.0.1', port=5000, loglevel='debug'):
+def dashboard(host='127.0.0.1', port=5000, rootdir='~', loglevel='debug'):
   chi.set_loglevel(loglevel)
 
   if port == 0:
@@ -33,7 +33,7 @@ def dashboard(host='127.0.0.1', port=5000, loglevel='debug'):
   app = Flask(__name__, root_path=p, static_url_path='/')
 
 
-  server = Server(host, port)
+  server = Server(host, port, rootdir)
 
   remotes = {}  # spin up all ssh servers in a config
 

@@ -32,7 +32,8 @@ class ndict(dict):
 
 
 class Server:
-  def __init__(self, host, port):
+  def __init__(self, host, port, rootdir):
+    self.rootdir = rootdir
     self.host = host
     self.port = port
     self.exps = {}
@@ -40,7 +41,7 @@ class Server:
     self.experiments()  # initial run
 
   def experiments(self):
-    ps = (os.path.dirname(f.path) for d in ['~', '~/.chi/experiments']
+    ps = (os.path.dirname(f.path) for d in [self.rootdir, '~/.chi/experiments']
                                   for f in rcollect(d, 10) if f.name == CONFNAME)
     # print(list(ps))
     exps = self.exps.copy()
@@ -239,9 +240,14 @@ def rcollect(path, depth, filter=None):
   if os.path.exists(path):
     for f in os.scandir(path):
       if filter(f.name):
-        if f.is_file():
+        t = 'undefined'
+        try:
+          t = 'file' if f.is_file() else 'dir' if f.is_dir() else 'undefined'
+        except OSError:
+          pass
+        if t == 'file':
           yield f
-        elif depth > 0:
+        elif t == 'dir' and depth > 0:
           for e in rcollect(f.path, depth - 1, filter):
             yield e
 
