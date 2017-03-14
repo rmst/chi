@@ -1,13 +1,13 @@
-import tensorflow as tf
-# TODO: make chi subclass of a SubModule (with "" scope)
+
+import os
 
 
-class ChiModule:
+class ChiModule:  # TODO: remove this class
   def __init__(self):
     self._sess = None
-    self._reg = []
 
-  def get_session(self) -> tf.Session:
+  def get_session(self):
+    import tensorflow as tf
     default = tf.get_default_session()
 
     if not (self._sess or default):
@@ -23,5 +23,7 @@ class ChiModule:
       self._sess.close()
 
 chi = ChiModule()
+
+home = os.path.expanduser('~/.chi')
 
 

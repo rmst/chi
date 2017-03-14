@@ -12,7 +12,7 @@ logger.setLevel(logging.INFO)
 # fh = logging.FileHandler('spam.log')
 # fh.setLevel(logging.DEBUG)
 # create console handler with a higher log level
-ch = logging.StreamHandler()
+ch = logging.StreamHandler(stream=sys.stderr)
 ch.setLevel(logging.DEBUG)
 # create formatter and add it to the handlers
 formatter = logging.Formatter('|%(asctime)s| chi/%(module)s: %(message)s')
@@ -34,31 +34,57 @@ class StdLogger:
     self.log = file
 
   def write(self, message):
-    self.terminal.write(message)
+
     self.log.write(message)
+    self.terminal.write(message)
+    self.flush()  # TODO: threaded flushing better?
 
   def flush(self):
     self.log.flush()
     pass
 
 
+# @contextmanager
+# def capture_std(filename, append=False):
+#   logfile = open(filename, "a" if append else "w+")
+#   ch = logging.StreamHandler(stream=logfile)
+#   logger.addHandler(ch)
+#
+#   a = StdLogger(logfile, sys.stdout)
+#   b = StdLogger(logfile, sys.stderr)
+#   sys.stdout = a
+#   sys.stderr = b
+#
+#   yield
+#
+#   sys.stderr = b.terminal
+#   sys.stdout = a.terminal
+#   logfile.close()
+
 @contextmanager
-def capture_std(filename):
-  logfile = open(filename, "a")
-  a = StdLogger(logfile, sys.stdout)
-  b = StdLogger(logfile, sys.stderr)
-  sys.stdout = a
-  sys.stderr = b
+def capture_std(fn, append=False):
+  logfile = open(fn, "a" if append else "w+")
+
+  wo = sys.stderr.write
+  fo = sys.stderr.flush
+
+  def write(m):
+    logfile.write(m)
+    logfile.flush()
+    wo(m)
+
+  def flush():
+    logfile.flush()
+    fo()
+
+  sys.stdout.write = write
+  sys.stderr.write = write
+  sys.stdout.flush = flush
+  sys.stderr.flush = flush
 
   yield
 
-  sys.stderr = b.terminal
-  sys.stdout = a.terminal
   logfile.close()
-
-
-
-
 
 if __name__ == "__main__":
   logger.info('info')

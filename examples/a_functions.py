@@ -49,3 +49,5 @@ my_tf_fun = chi.function(my_tf_fun)
 assert my_tf_fun(3, 5) == 15.
 
 # other than decorators, this does not break type inference and auto complete
+# actually i've filed an issue for that in PyCharm. It shouldn't be very hard to make that work:
+# https://youtrack.jetbrains.com/issue/PY-23060 (you can upvote it)

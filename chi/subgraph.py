@@ -12,6 +12,7 @@ from tensorflow.contrib import framework as fw
 # fw.arg_scope
 from . import chi
 from . import util
+from .argscope import argscope
 
 
 class SubGraph:
@@ -36,32 +37,42 @@ class SubGraph:
       SubGraph.stack[-1]._children.append(self)
 
     with tf.variable_scope(scope, default_name, custom_getter=self._cg) as sc:
-      self._scope = sc
+      if hasattr(self, '_scope'):
+        assert self._scope is sc
+      else:
+        self._scope = sc
       self.name = sc.name
       SubGraph.stack.append(self)
       self.output = f()
-      SubGraph.stack.pop()
+      self.init_op = tf.variables_initializer(self._init_vars())
+      assert SubGraph.stack.pop() is self
+
+      # self._init_check_op = tf.report_uninitialized_variables(self._init_vars())
 
   def _cg(self, getter, name, *args, **kwargs):
+    from .util import in_collections
     relative_name = util.relpath(name + ':0', self._scope.name)
     v = self._getter(relative_name) if self._getter else None
     if v:
-      logger.debug('reuse {}'.format(name))
+      logger.debug(f'reuse {v.name} as {name} - {in_collections(v)}')
       self._reused_variables.append(v)
     else:
-      logger.debug('create {}'.format(name))
       v = getter(name, *args, **kwargs)
+      logger.debug(f'create {v.name} - {in_collections(v)}')
 
     return v
 
-  def initialize(self):  # TODO: init from checkpoint
+  def _init_vars(self):
     l = self.local_variables()
     g = self.global_variables()
-    r = self._get_reused_variables()
-    vs = l+g+r
-    names = chi.get_session().run(tf.report_uninitialized_variables(vs))
-    initvs = [v for v in vs if v.name[:-2].encode() in names]
-    chi.get_session().run(tf.variables_initializer(initvs))
+    # r = self._get_reused_variables()
+    # vs = l+g+r
+    return l+g
+
+  def initialize(self):  # TODO: init from checkpoint
+    # names = chi.get_session().run(self._init_check_op)
+    # initvs = [v for v in self._init_vars() if v.name[:-2].encode() in names]
+    chi.get_session().run(self.init_op)
 
   def _get_reused_variables(self):
     vs = self._reused_variables
@@ -94,6 +105,12 @@ class SubGraph:
 
   def local_variables(self):
     return self.get_collection(tf.GraphKeys.LOCAL_VARIABLES)
+
+  def activations(self):
+    return self.get_collection(tf.GraphKeys.ACTIVATIONS)
+
+  def gradients(self):
+    return self.get_collection('chi_gradients')
 
   def losses(self):
     return self.get_collection(tf.GraphKeys.LOSSES)

@@ -1,4 +1,6 @@
 import inspect
+import threading
+import traceback
 from collections import OrderedDict
 from contextlib import contextmanager
 import signal
@@ -6,59 +8,98 @@ import signal
 import sys
 
 import chi
+from inspect import Parameter
 
 
-def app(f=None):
-  return App(f)
+def app(f):
+  a = App(f)
+  if sys.modules[f.__module__].__name__ == '__main__':
+    a.parse_args_and_run()
+
+  return a.run
+
+
+class SigtermException(BaseException):
+  pass
+
+
+@contextmanager
+def sigterm_exception():
+  original_handler = signal.getsignal(signal.SIGTERM)
+
+  t = threading.current_thread()
+  # print('fdksfdskfkdsfds', t)
+
+  def handle_sigterm(signum, frame):
+    print('- sigterm -')
+    sys.exit()
+
+  try:
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    yield
+  finally:
+    signal.signal(signal.SIGTERM, original_handler)
 
 
 class App:
-  def __init__(self, f: callable, extra_args=None):
-
+  def __init__(self, f: callable):
     self.f = f
-    extra_args = extra_args or {}
-
-    self.args = OrderedDict(extra_args)
+    self.argv = sys.argv
     sig = inspect.signature(f)
-    self.native_args = []
-    for n, v in sig.parameters.items():
-      d = None if v.default == inspect.Parameter.empty else v.default
-      a = "" if v.annotation == inspect.Parameter.empty else v.annotation
-      self.args.update({n: (d, a)})
-      self.native_args.append(n)
+    self.native_params = sig.parameters
+    self.has_self = list(sig.parameters.keys())[0] == 'self'
+    if self.has_self:
+      # remove "self"
+      self.params = OrderedDict(p for i, p in enumerate(sig.parameters.items()) if i > 0)
+    else:
+      self.params = sig.parameters
 
-    if sys.modules[f.__module__].__name__ == '__main__':
-      import argparse
-      parser = argparse.ArgumentParser(description=f.__name__)
-
-      for n, (v, a) in self.args.items():
-        parser.add_argument('--{}'.format(n), default=v, help=a)
-
-      ag = parser.parse_args()
-
-      kwargs = {n: v for n, (v, _) in self.args.items()}
-      kwargs.update(ag.__dict__)
-
-      result = self.__call__(**kwargs)
-
-      sys.exit(result)
-
-  def __call__(self, *args, **kwargs):
+  def run(self, *args, **kwargs):
     # make all args kwargs
-    args = {n: v for (n, _), v in zip(self.args, args)}
+    args = {n: a for n, a in zip(self.native_params, args)}
     assert not set(args.keys()).intersection(kwargs.keys())  # conflicting args and kwargs
     kwargs.update(args)
+    with sigterm_exception():
+      return self._run(**kwargs)
 
-    result = self.run(**kwargs)
-
-    return result
-
-  def run(self, **kwargs):
+  def _run(self, **kwargs):
     # only use valid args
-    kwargs = {n: v for n, v in kwargs.items() if n in self.native_args}
+    kwargs = {n: v for n, v in kwargs.items() if n in self.native_params}
+    if self.has_self:
+      return self.f(self, **kwargs)
+    else:
+      return self.f(**kwargs)
 
-    result = self.f(**kwargs)
+  def parse_args_and_run(self, args=None):
+    args = args or sys.argv
+    import argparse
+    parser = argparse.ArgumentParser(description=self.f.__name__)
 
-    return result
+    for n, p in self.params.items():
+      d = p.default == Parameter.empty
+      t = str if d else type(p.default)
+      if t is bool:
+        g = parser.add_mutually_exclusive_group(required=False)
+        g.add_argument('--' + n, dest=n, action='store_true')
+        g.add_argument('--no-' + n, dest=n, action='store_false')
+        parser.set_defaults(**{n: Parameter.empty})
+      elif p.kind == Parameter.POSITIONAL_OR_KEYWORD:
+        g = parser.add_mutually_exclusive_group(required=d)
+        g.add_argument(n, nargs='?', type=t, default=Parameter.empty)
+        g.add_argument('--' + n, dest='--' + n, type=t, default=Parameter.empty, help=argparse.SUPPRESS)
+      elif p.kind == Parameter.KEYWORD_ONLY:
+        parser.add_argument('--' + n, type=type(p.default), default=p.default)
 
+    ag = vars(parser.parse_args())
+    parsed = {}
+    for n, p in self.params.items():
+      a, b, c = ag[n], ag.get('--' + n, Parameter.empty), p.default
+      v = a if a != Parameter.empty else b if b != Parameter.empty else c
+      parsed.update({n: v})
 
+    result = self.run(**parsed)
+
+    from chi.logger import logger
+    logger.info('Finishing with ' + str(result))
+
+    sys.exit(result)

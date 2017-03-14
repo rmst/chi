@@ -1,5 +1,5 @@
 # chi
-
+Chi is a high level experimentation framework for AI scientists.
 #### Installation
 
 Requires TensorFlow and Python 3

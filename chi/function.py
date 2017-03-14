@@ -1,33 +1,44 @@
 import tensorflow as tf
-from .model import Model
+from .subgraph import SubGraph
 from . import util
 import chi
 import inspect
 import numpy as np
 from chi.logger import logger
 import os
-
-def function(f=None, logdir=None, *args, **kwargs):
-  if f:  # use as function
-    if isinstance(f, Function):
-      return f
-    else:
-      return Function(f, logdir, *args, **kwargs)
-  else:  # use with @ as decorator
-    return lambda f: Function(f, logdir, *args, **kwargs)
+from .argscope import argscope
+import random
+from functools import wraps
 
 
-class Function(Model):
+@argscope
+class Function(SubGraph):
+  """
 
-  def __init__(self, f, logdir=None, *args, **kwargs):
-    self._step = 0
-    Model.__init__(self, f, *args, **kwargs)
+  """
+  def __init__(self, f, logdir=None, logging_policy=None, scope=None,
+               _experiment=None, _arg_spec=None):
+    """
+
+    :param f:
+    :param logdir:
+    :param args:
+    :param kwargs:
+    """
+    self.logging_policy = logging_policy
+    self.logdir = logdir
+    self._experiment = _experiment
+    self._f = f
 
     # process inputs
     import collections
     self.inputs = collections.OrderedDict()
     self.auto_wrap = collections.OrderedDict()
     for name, dtype, shape, default in parse_signature(f):
+      if _arg_spec and name in _arg_spec:
+        sh, dtype = _arg_spec[name]
+        assert isinstance(sh, tf.TensorShape)
+        shape = sh.merge_with(shape) if shape is None else shape
       if default:
         p = tf.placeholder_with_default(default, shape)
       else:
@@ -36,68 +47,78 @@ class Function(Model):
       self.inputs.update({name: p})
     self.use_wrap = any(self.auto_wrap.values())
 
+    self._iscope = scope
+    # if not self._scope:
+    #   with tf.variable_scope(f.__name__) as sc:
+    #     self._scope = sc
+
+    self._build()
+
+  def _build(self):
     # build graph
-    out = super().__call__(**self.inputs)  # build Model
-    self.__dict__.update(self._last_graph.__dict__)  # make SubGraph properties available in self
+    self._built = True
 
-    # process outputs
-    if out is None:
-      self.output = tf.no_op()
-    # elif self.use_wrap:
-    #   self.unwrap = []
-    #   self.output = []
-    #   if isinstance(out, tuple):
-    #     for x in out:
-    #       unwrap = isinstance(x, list)
-    #       if unwrap:
-    #         assert len(x) == 1 and isinstance(x[0], tf.Tensor)
-    #         x = x[0]
-    #       self.unwrap.append(unwrap)
-    #       self.output.append(x)
-    #   elif isinstance(out, list):
-    #     assert len(out) == 1 and isinstance(out[0], tf.Tensor)
-    #     self.output = out[0]
+    def scoped():
+      self._step = tf.get_variable('step', initializer=0, trainable=False)
+      self._advance = self._step.assign_add(1)
 
-    # self.inputs = self.get_tensors_by_optype("Placeholder")
+      out = self._f(**self.inputs)
 
-    if logdir:
-      current_exp = chi.Experiment.current_exp
-      if not logdir.startswith('/'):
-        logger.debug('logdir path relative to exp: {}'.format(current_exp))
-        logger.debug('... with logdir {}'.format(current_exp.logdir))
-        if current_exp and current_exp.logdir:
+      # collect summaries
+      summaries = super(Function, self).summaries()
+      self._summary_op = tf.summary.merge(summaries) if summaries else None
 
-          logdir = os.path.join(current_exp.logdir, logdir)
-        else:
-          logger.debug('fall back to logdir path relative to working dir')
-          os.path.abspath('./'+logdir)
+      self._output = tf.no_op(name='run') if out is None else out
 
-      self.writer = tf.summary.FileWriter(logdir, graph=chi.chi.get_session().graph)
+      return out
+
+    super().__init__(scoped, self._iscope, self._f.__name__)
+    self.output = self._output
+    self.step = 0
+
+    if self.logdir:
+      writer = self._experiment.writers.get(self.logdir) if self._experiment else None
+      if not writer:
+        writer = tf.summary.FileWriter(self.logdir)
+        self._experiment.writers.update({self.logdir: writer})
+
+      writer.add_graph(chi.chi.get_session().graph)
+      self.writer = writer
+
+      self.logging_policy = self.logging_policy or decaying_logging_policy
     else:
       self.writer = None
 
-    # collect summaries
-    activations = self.get_tensors_by_optype('Relu')  # TODO: generalize to non-Relu
-    # activations = self.subgraph.histogram_summaries(activations, 'activations')
-    summaries = self.summaries()
-    if summaries and self.writer:
-      self._summary_op = tf.summary.merge(summaries)
-
     super().initialize()
 
+  # def __getattribute__(self, *args, **kwargs):
+  #   ga = object.__getattribute__
+  #   try:
+  #     if not ga(self, '_built'):
+  #       ga(self, '_build')()
+  #   except AttributeError:
+  #     pass
+  #
+  #   return ga(self, *args, **kwargs)
+
   def __call__(self, *args, **kwargs):
+    if not self._built:
+      self._build()
+
     feeds = {}
-    use_wrap = False
+    use_wrap = False  # automatically add batch dimension true and necessary
     for p, auto_wrap, arg in zip(self.inputs.values(), self.auto_wrap.values(), args):
       if auto_wrap:
         arg = np.array(arg)
         if p.get_shape().is_compatible_with(arg.shape):
           assert not use_wrap
         else:
-          arg = arg[np.newaxis, ...]  # add batch dimension
-          use_wrap = True
-          assert p.get_shape().is_compatible_with(arg.shape)
-
+          wrapped = arg[np.newaxis, ...]  # add batch dimension
+          if p.get_shape().is_compatible_with(wrapped.shape):
+            arg = wrapped
+            use_wrap = True
+          else:
+            pass  # let TF throw the error
       feeds[p] = arg
 
     feeds.update(kwargs)  # TODO: process kwargs correctly
@@ -111,17 +132,19 @@ class Function(Model):
       else:
         results = results[0, ...] if isinstance(results, np.ndarray) and results.shape[0] == 1 else results
 
-    self._step += 1
     return results
 
   def run_log(self, fetches, feeds):
-    log = self.writer  # TODO: good default logging policy
+    log = self._summary_op is not None and self.writer and self.logging_policy(self.step)
+    fetches = (fetches, self._advance)
     if log:
-      fetches = (fetches, self._summary_op)
-      results, summary = chi.chi.get_session().run((fetches, self._summary_op), feeds)
-      self.writer.add_summary(summary, global_step=self._step)
+      (results, step), summary = chi.chi.get_session().run((fetches, self._summary_op), feeds)
+      global_step = self._experiment.global_step if self._experiment else None
+      self.writer.add_summary(summary, global_step=global_step or step)
     else:
-      results = chi.chi.get_session().run(fetches, feeds)
+      results, step = chi.chi.get_session().run(fetches, feeds)
+
+    self.step = step
     return results
 
   def reset(self):
@@ -136,6 +159,7 @@ class Function(Model):
     #   print("DDPG Checkpoint: " + s)
     pass
 
+
   # TODO: SubGraph as class method
   # def __get__(self, obj, objtype):
   #   """
@@ -148,6 +172,14 @@ class Function(Model):
   #   else:
   #     # if we are called directly from the class (not the instance) TODO: error?
   #     pass
+
+
+def function(f=None, *args, **kwargs) -> Function:
+  """
+  Decorator that transforms the decorated function into a chi.Function
+  """
+  deco = lambda f: Function(f, *args, **kwargs)
+  return deco(f) if f else deco
 
 
 def parse_signature(f):
@@ -164,6 +196,9 @@ def parse_signature(f):
 
   return out
 
+
+def decaying_logging_policy(step):
+  return random.random() < max(.01, 1000 / (step+1))
 
 
 def test_runnable():

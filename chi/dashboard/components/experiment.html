@@ -71,15 +71,25 @@
 
   	};
 
-    paper-tabs{
-    	margin-left: 30px;
+
+    .cont{
+      overflow: hidden;
+
     };
 
-    iframe{
-          height: 100%;
-          width: 100%;
-          margin-top: -10px;
-          padding: 0;
+    #tb{
+      /*overflow: hidden;*/
+      height: calc(100% + 10px);
+      width: 100%;
+      margin-top: -10px;
+      padding: 0;
+    };
+
+    #jupyter{
+      height: calc(100% + 95px);
+      width: 100%;
+      margin-top: -95px;
+      padding: 0;
     };
 
     .log-page{
@@ -96,30 +106,37 @@
 			overflow: auto;
 
     };
+
+    paper-tabs{
+      margin-left: 30px;
+    };
+    
     iron-pages{
-         height: 100%;
-          width: 100%;
-                      margin: 0;
-          padding: 0;
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
     }
 
     .page{
-         height: 100%;
-          width: 100%;
-                      margin: 0;
-          padding: 0;
-          overflow: auto;
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
     };
 
     #details{
-    	  		font-family: "Lucida Console", Monaco, monospace;
-		color: black;
-		width: 100%;
-		height: 100%;
-		overflow: auto;
-		box-sizing: border-box;
-		padding: 15px;
+      font-family: "Lucida Console", Monaco, monospace;
+      color: black;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      box-sizing: border-box;
+
+      padding: 15px;
     }
+
 
   </style>
 
@@ -132,7 +149,8 @@
       <paper-tabs selected="{{selected}}">
 			  <paper-tab>Logs</paper-tab>
 			  <paper-tab>Details</paper-tab>
-			  <paper-tab>TensorBoard</paper-tab>
+        <paper-tab>TensorBoard</paper-tab>
+        <paper-tab>Files</paper-tab>
 			</paper-tabs>
 
     </paper-toolbar>
@@ -145,13 +163,27 @@
 	  	</div>
 
     	<div class="page">
-    		<pre id="details" class=""></pre>
+    		<pre id="details" class="">{{detailsc}}</pre>
     	</div>
 
 		  <div class="page">
-				<!-- <div style="height:40px"></div> -->
-		  	<iframe name="dudu" id="myiframe" src=""></iframe>
+        <template is="dom-if" if="{{no_event_files}}">
+          <div style="height: 100%; width:100%; padding-top: 109px; text-align: center;">
+            No event files
+          </div>
+        </template>
+        <template is="dom-if" if="{{ef}}">
+				  <!-- <div style="height:40px"></div> -->
+		  	 <iframe id="tb" src="{{framesrc}}"></iframe>
+        </template>
 		  </div>
+
+      <div class="page">
+        <template is="dom-if" if="{{jupyter}}">
+          <iframe id="jupyter" src="http://localhost:{{details.jupyter_port}}/tree{{details.alternate_path}}"></iframe>
+        </template>
+      </div>
+
 		</iron-pages>
 
 	</paper-header-panel>
@@ -163,14 +195,47 @@
 
     properties: {
 	    selected: {
-	        value: 0
+        value: 0,
+        notify: true,
 	    },
 
 	    logs: Array,
 
+      detailsc: {
+        type: String,
+        notify: true,
+      },
+
+      details: {
+        type: Object,
+        notify: true,
+      },
+
+      jupyter: Boolean,
+
+      framesrc: {
+        value: "",
+        notify: true,
+      },
+      ef: Boolean,
+      no_event_files: Boolean,
     },
 
-    ready: function(){
+    ready: ()=>{
+      // tensorboard
+
+      var frame = this.myiframe
+      // frame._empty = true
+
+      $('#myiframe').on('load', ()=>{
+        console.log('loaded '+frame.src)
+      })
+
+
+    },
+
+    created: function(){
+      var self = this
 
     	// details
       var req_details = function(){
@@ -182,43 +247,21 @@
 
         $.getJSON(url, data => {
           console.log('got details')
+          console.log(data)
           document.title = data.name
-          this.details.innerHTML = JSON.stringify(data, undefined, 2);
+
+          self.detailsc = JSON.stringify(data, undefined, 2);
+
+          self.details = data
+          self.jupyter = data.jupyter_port != -1
         })
  			}
 
       req_details()
-      setInterval(req_details, 2000)
-
-
-      // tensorboard
-
-      var frame = this.$.myiframe
-      frame._empty = true
-
-      // $('#myiframe').on('load', ()=>{
-      //   console.log('onload')
-      //   frame._is_active=true
-      // })
-
-      var req_tb = function(){ 
-        url = '/tb/' + window.location.hash.split('/').slice(1).join('/')   
-        $.getJSON(url, data => {
-          console.log('got data')
-          src = 'http://'+data.host+':'+data.port
-          if(frame._empty || data.new){
-            frame.src = src
-            frame._empty = false
-          }
-      	});
-      }
-
-      req_tb()
-      setInterval(req_tb, 5000);
+      setInterval(req_details, 5000)
 
 
       // logs
-      var self = this
       var req_logs = function(){
       	loc = window.location.hash.split('/')
       	host = loc[1] == 'local' ? window.location.host : loc[1]
@@ -233,10 +276,34 @@
  			}
 
       req_logs()
-      setInterval(req_logs, 2000)
+      setInterval(req_logs, 5000)
 
 
-    }
+      // tensorboard
+      var req_tb = function(){ 
+        url = '/tb/' + window.location.hash.split('/').slice(1).join('/')   
+        $.getJSON(url, data => {
+          console.log('got tb', data)
+          self.no_event_files = data.no_event_files
+          self.ef = ! data.no_event_files
+          if(self.ef){
+            src = 'http://'+data.host+':'+data.port
+            if(self.framesrc == "" || data.new){
+
+              self.framesrc = src
+              self.selected = 2
+              // frame._empty = false
+            }
+          }
+
+        });
+      }
+
+      req_tb()
+      setInterval(req_tb, 5000);
+
+
+    },
 
   });
   </script>
@@ -275,14 +342,22 @@
 
 	};
 
+  pre{
+    white-space: pre-wrap;
+    word-break: keep-all;
+  }
 </style>
 
 <template>
 	<paper-header-panel mode="seamed">
 	  <paper-toolbar>
-	  	<div id="title" class="title"></div>
+	  	<div id="title" class="title">[[data.name]]</div>
   	</paper-toolbar>
-	 <div id="log"><pre id="content"></pre></div>
+	 <div id="log">
+    <pre id="content">
+      <!-- [[data.content]] -->
+    </pre>
+   </div>
   </paper-header-panel>
 </template>
 
@@ -301,17 +376,24 @@ Polymer({
 
   ready: function(){
  		var log = this.$.log
+    Polymer.RenderStatus.afterNextRender(this, () => {
+      this.$.content.innerHTML = this.data.content
+      log.scrollTop = log.scrollHeight;
+    })
+    console.log('ready')
+
  		this.$.log._should_scroll = true
  		log.onscroll = ()=>{
  			this.$.log._should_scroll = log.scrollHeight-log.scrollTop == log.clientHeight
- 			console.log(this.$.log._should_scroll)
+ 			// console.log(this.$.log._should_scroll)
  		}
   	this.addEventListener("data-changed", ()=>{
 			console.log('data-changed')
-  		this.$.title.innerHTML = this.data.name
-  		this.$.content.innerHTML = this.data.content
+  		// this.$.title.innerHTML = this.data.name
+  		
   		if(this.$.log._should_scroll){
   			console.log('scroll')
+        this.$.content.innerHTML = this.data.content
 	      Polymer.RenderStatus.afterNextRender(this, () => {
     			log.scrollTop = log.scrollHeight;
     		})

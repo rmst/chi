@@ -7,4 +7,7 @@ def test_all():
 
   from examples import b_models
 
+
+def test_experiment():
   from examples import c_experiments
+  c_experiments.my_experiment()

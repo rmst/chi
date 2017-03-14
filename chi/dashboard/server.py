@@ -1,54 +1,172 @@
-from collections import OrderedDict
+import getpass
 import os
-import json
-
 import shutil
-import tensorflow as tf
-from time import time, sleep
-import fnmatch
-import random
-import numpy as np
-import io
-import matplotlib
-# matplotlib.use("agg")
-from matplotlib import pyplot as plt
-from matplotlib import figure
 import subprocess
-import socket
+from os.path import join
 from threading import Thread
+from time import sleep
+
+from flask_socketio import Namespace
+
+from chi.dashboard.experiment import ExperimentView, CONFNAME
+from chi.dashboard.util import Repo, get_free, rcollect
 from chi.logger import logger
-import requests
-from chi.dashboard import repeat_until
+from chi.util import mkdirs
+
+
 # local schema: http://<host>:<port>/exp/local/<path>/
 # remote schema: ... /exp/ssh/<num>/<path>/
 
-CONFNAME = 'experiment.chi'
 
-class ndict(dict):
-  """dot.notation access to dictionary attributes"""
-  __getattr__ = dict.get
-  __setattr__ = dict.__setitem__
-  __delattr__ = dict.__delitem__
-
-
-class Server:
-  def __init__(self, host, port, rootdir):
+class Server(Namespace, Repo):
+  def __init__(self, host, port, rootdir, port_pool):
+    self.port_pool = port_pool
     self.rootdir = rootdir
     self.host = host
     self.port = port
     self.exps = {}
 
-    self.experiments()  # initial run
+    # Start jupyter
+    jpt = shutil.which('jupyter')
+    self.jupyter_port = p = get_free(self.port_pool) if jpt else -1
+    if jpt:
+      csp = str(dict(headers={'Content-Security-Policy':
+                              f"frame-ancestors 'self' http://localhost:{self.port}/"}))
+
+      logger.debug(f'Start jupyter ({jpt}) on port {p}')
+      self.jupyter = subprocess.Popen([jpt, 'notebook', '--port='+str(p),
+                                       '--no-browser', '/',
+                                       "--NotebookApp.token=''",
+                                       f"--NotebookApp.tornado_settings={csp}",
+                                       f"--FileContentsManager.hide_globs=['']"],
+                                      stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL,
+                                      )
+
+    Namespace.__init__(self, '/experiments')
+
+    # Init Repo
+    alt = '/tmp/chi_' + getpass.getuser()
+    if os.path.exists(alt):
+      os.remove(alt)
+    os.symlink(os.path.expanduser('~/.chi'), alt, target_is_directory=True)
+    roots = [rootdir,
+             join(alt, 'experiments'),
+             join(alt, 'dashboard'),
+             join(alt, 'apps')]
+    for p in roots:
+      mkdirs(os.path.expanduser(p))
+
+    bashrc = os.path.expanduser('~/.chi') + '/bashrc.sh'
+    if os.path.exists(bashrc):
+      os.remove(bashrc)
+    os.symlink(os.path.expanduser('~/.bashrc'), bashrc)
+    self.bashrc = bashrc
+
+
+    self.connections = 0
+    Repo.__init__(self, roots)
+
+    # Poll filesystem
+    def scan():
+      while True:
+        self.experiments()
+        sleep(15)
+
+    Thread(target=scan, daemon=True).start()
+
+    # Watch filesystem with inotify
+    Repo.observer.start()
+
+  def dispatch(self, event):
+    try:
+      super().dispatch(event)
+    except Exception as e:
+      import traceback
+      traceback.print_exc()
+      logger.error(str(e))
+
+  def on_connect(self):
+    if self.connections == 0:
+      pass
+
+    self.emit('info', dict(jupyter_port=self.jupyter_port,
+                           user=os.environ.get('USER'),
+                           bashrc=self.bashrc,
+                           ))
+
+    self.upd()
+
+    self.connections += 1
+    logger.debug(f'connect ({self.connections})')
+
+  def on_disconnect(self):
+
+    self.connections -= 1
+    logger.debug(f'disconnect ({self.connections})')
+
+  def on_json(self, data):
+    pass
+
+  def upd(self):
+    self.emit('data', [self.info(p) for p in self.exps])
+
+  def on_moved(self, event):
+
+    """
+    event.event_type
+        'modified' | 'created' | 'moved' | 'deleted'
+    event.is_directory
+        True | False
+    event.src_path
+        path/to/observed/file
+    """
+    logger.debug(str(event))
+
+  def on_created(self, event):
+    sleep(3)
+    ex = os.path.exists(os.path.join(event.src_path, 'experiment.chi'))
+    logger.debug('Folder created ' + str(event))
+    logger.debug('is exp ' + str(ex))
+
+    self.on_found(event.is_directory, event.src_path)
+
+  def on_modified(self, event):
+    pass
+
+  def on_found(self, is_dir, path):
+    if is_dir and os.path.exists(os.path.join(path, 'experiment.chi')):
+      e = ExperimentView(path, self.host, self.port, self)
+      self.exps.update({path: e})
+      if self.socketio:
+        self.upd()
+        logger.debug(f'{len(self.exps)} experiments')
+
+  def on_deleted(self, event):
+    logger.debug(str(event))
+    if event.is_directory:
+      p = event.src_path
+      e = self.exps.get(p)
+      if e:
+        e.delete()
+        del self.exps[p]
+        logger.debug('actually deleted exp')
+      if self.socketio:
+        self.upd()
+        logger.debug(f'{len(self.exps)} experiments')
 
   def experiments(self):
-    ps = (os.path.dirname(f.path) for d in [self.rootdir, '~/.chi/experiments']
-                                  for f in rcollect(d, 10) if f.name == CONFNAME)
+    ps = (os.path.dirname(f.path) for d in [self.rootdir,
+                                            '~/.chi/experiments',
+                                            '~/.chi/dashboard',
+                                            '~/.chi/apps']
+          for f in rcollect(d, 10) if f.name == CONFNAME)
     # print(list(ps))
     exps = self.exps.copy()
     res = []
 
     for p in ps:
-      e = exps.pop(p, None) or Exp(p, self.host, self.port)
+      e = exps.pop(p, None) or ExperimentView(p, self.host, self.port, self)
       res.append(e.update())
       self.exps.update({p: e})
 
@@ -56,10 +174,10 @@ class Server:
       v.delete()
       del self.exps[e]
 
-    return res
+    self.upd()
 
   def adde(self, p):
-    self.exps.update({p: Exp(p, self.host, self.port)})
+    self.exps.update({p: ExperimentView(p, self.host, self.port, self)})
 
   def info(self, path):
     if path not in self.exps:
@@ -67,10 +185,19 @@ class Server:
     return self.exps[path].update()
 
   def trend(self, path):
+    if path not in self.exps:
+      self.adde(path)
     return self.exps[path].plot_trend()
 
   def delete(self, path):
+    if path not in self.exps:
+      self.adde(path)
     return self.exps[path].rm()
+
+  def command(self, cmd, path):
+    if path not in self.exps:
+      self.adde(path)
+    return self.exps[path].command(cmd)
 
   def tensorboard(self, path):
     if path not in self.exps:
@@ -78,176 +205,7 @@ class Server:
     return self.exps[path].tensorboard()
 
   def shutdown(self):
-    for e in self.exps:
+    for e in self.exps.values():
       e.delete()
 
-
-class Exp:
-  def __init__(self, path, host, port):
-    self.host = host
-    self.port = port
-    self.path = path  # path to exp folder
-    self.data = ndict(timestamp=0)
-    self.plot_t = time() + 2 * random.random()
-    self.plot_cache = None
-    self.tb = None
-    self.tb_t = 0
-    self.tb_port = None
-
-    self.update()
-
-  def update(self):
-    if time() - self.data.timestamp < 2:
-      return self.data
-
-    conf = self.path + '/' + CONFNAME
-    with open(conf) as fd:
-      self.data.update(json.load(fd))
-
-    is_new = 'rand' not in self.data
-    alive = time() - os.path.getmtime(conf) < 15  # check heartbeat
-    outdated = time() - self.plot_t > 10
-    if is_new or (alive and outdated):
-      # new rand causes frontend trends to update
-      self.data.rand = random.randint(0, 1000000)
-
-    status = 'dead' if not alive else 'running' if 't_start' in self.data else 'pending'
-    self.data.update(status=status, path=self.path, timestamp=time(), host=self.host, port=self.port, hostid='local')
-
-    return self.data
-
-  def tensorboard(self):
-    if not self.tb:
-      self.tb_port = get_free_port(self.host)  # TODO: use self.host here?
-      cmds = ['tensorboard', '--logdir', "{}".format(self.path), '--host', '0.0.0.0', '--port', str(self.tb_port)]
-      logger.debug('Start tensorboard with: ' + ' '.join(cmds))
-      self.tb = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-      Thread(target=self.tb_watcher, daemon=True).start()
-
-      @repeat_until(timeout=3.)
-      def check_tb():
-        try:
-          url = "http://{}:{}".format(self.host, self.tb_port)
-          r = requests.get(url)  # requests.head not supported by tensorboard
-          available = r.status_code == 200
-          sleep(.3)
-          logger.debug('tb on {} status {}, {}'.format(url, r.status_code, r.reason))
-          return available
-        except requests.ConnectionError:
-          return False
-
-      if not check_tb:
-        logger.warning('tb could not be started')
-
-      self.tb_t = time()
-      Thread(target=self.tb_killer, daemon=True).start()
-      return dict(host=self.host, port=self.tb_port, new=True, available=check_tb)
-
-    else:
-      self.tb_t = time()  # heartbeat
-      # print('heartbeat')
-      return dict(host=self.host, port=self.tb_port, new=False, available=True)
-
-  def tb_watcher(self):
-    assert isinstance(self.tb, subprocess.Popen)
-    outs, errs = self.tb.communicate()
-    returncode = self.tb.returncode
-    self.tb = None
-    msg = 'tensorboard on {} for {} returned with code {}'.format(self.tb_port, self.path, returncode)
-    if returncode == 0:
-      logger.debug(msg)
-    else:
-      logger.warning(msg)
-      logger.warning('out: '+outs)
-      logger.warning('err: '+errs)
-    print('watcher finish')
-
-  def tb_killer(self):
-    tb = self.tb
-    while tb and not tb.poll():
-      if time() - self.tb_t > 60:
-        assert isinstance(tb, subprocess.Popen)
-        tb.terminate()
-        logger.debug('tensorboard for {} kill because timeout'.format(self.path))
-        # break
-      sleep(5)
-    logger.debug('killer finish')
-
-  def rm(self):
-    # print('rm')
-    self.delete()
-    shutil.rmtree(self.path, ignore_errors=False)
-    return {'nothing': None}
-
-  def delete(self):
-    if self.tb:
-      self.tb.kill()
-
-  def plot_trend(self):
-    if time() - self.plot_t < 10 and self.plot_cache:  # cache
-      return io.BytesIO(self.plot_cache)
-
-    self.plot_t = time() + 2 * random.random()
-    f, ax = plt.subplots()
-    f.set_size_inches((8, 2.5))
-    f.set_tight_layout(True)
-    name, x = self.trend_data(['dashboard', 'loss', 'return'])
-    pl, = ax.plot(x[:, 0], x[:, 1])
-    assert isinstance(f, figure.Figure)
-    f.legend([pl], [name])
-    # ax.plot(i,r)
-    sio = io.BytesIO()
-    f.savefig(sio, format='png', dpi=100, transparent=True)
-
-    self.plot_cache = sio.getvalue()
-    sio.seek(0)
-    plt.close(f)
-    return sio
-
-  def trend_data(self, keywords):
-    import glob
-    # a = glob.glob(path + '/**/*.tfevents.*', recursive=True)
-    a = [f.path for f in rcollect(self.path, 3) if 'tfevents' in f.name ]
-    target = None
-    data = []
-    for ef in a:
-      if not data:
-        for e in tf.train.summary_iterator(ef):
-          for v in e.summary.value:
-            if not target and any(k in v.tag for k in keywords):
-              target = v.tag
-            if target and target == v.tag:
-              data.append((e.step, v.simple_value))
-
-    if len(data) == 0:
-      data = np.zeros([1, 2])
-    return target, np.array(data)
-
-
-# Util
-
-def get_free_port(host):
-  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  sock.bind((host, 0))
-  port = sock.getsockname()[1]
-  sock.close()
-  return port
-
-
-def rcollect(path, depth, filter=None):
-  filter = filter or (lambda n: not n.startswith('.'))
-  path = os.path.expanduser(path)
-  if os.path.exists(path):
-    for f in os.scandir(path):
-      if filter(f.name):
-        t = 'undefined'
-        try:
-          t = 'file' if f.is_file() else 'dir' if f.is_dir() else 'undefined'
-        except OSError:
-          pass
-        if t == 'file':
-          yield f
-        elif t == 'dir' and depth > 0:
-          for e in rcollect(f.path, depth - 1, filter):
-            yield e
-
+    self.jupyter.kill()

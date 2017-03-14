@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+import chi
+from chi.dashboard import MAGIC_PORT, port2pid
+
+
+@chi.experiment
+def remote_chiboard(self: chi.Experiment, address, port=MAGIC_PORT, max_connections=20, password=""):
+  import subprocess
+  from chi.util import cmd_args
+
+  from chi.dashboard.util import get_free_port
+  from chi.dashboard.util import check_free
+
+  self.config.name = 'chiboard@' + address.split('@')[1]
+  while not check_free(port):
+    import os
+    import signal
+    pid = port2pid(port)
+
+    for p in pid:
+      n = subprocess.check_output(['ps', '-p', str(p), '-o', 'comm='], universal_newlines=True)
+      n = n[:-1]
+      print('Port occupied by ' + n + ' - ' + str(p))
+      if n == 'ssh':
+        os.kill(p, signal.SIGINT)
+
+  print('Port free')
+
+  pool = [get_free_port() for _ in range(max_connections)]
+  poolstr = ','.join([str(p) for p in pool])
+
+  cmd = []
+  if password:
+    cmd += ['sshpass', '-p', password]
+
+  cmd += ['ssh']
+
+  for p in [port]+pool:
+    cmd += ['-L', f'{p}:localhost:{p}']
+  chiboard = 'chiboard ' + ' '.join(cmd_args(port=port, port_pool=poolstr))
+  cmd += ['-v',
+          '-t', '-t',
+          address,
+          f"/bin/bash -O huponexit -c '{chiboard}'",  # kill chiboard if ssh dies
+          ]
+  print(cmd)
+  p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+  try:
+    while True:
+      line = p.stdout.readline()
+      if not line:
+        break
+      print(line[:-1])
+    retval = p.wait()
+    return retval
+  finally:
+    print('terminate ssh')
+    p.kill()

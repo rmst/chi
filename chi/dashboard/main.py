@@ -1,41 +1,79 @@
 #!/usr/bin/env python3
-from flask import Flask, Response, jsonify, send_from_directory, send_file
-import flask
+import json
+from typing import NamedTuple
+
+from os.path import join
+
 import chi
-from chi.dashboard.server import get_free_port, Server, rcollect
-import requests
-import socket
-from chi.logger import logger
-from chi.dashboard import port2pid
+from chi.dashboard import MAGIC_PORT
 
-import os
-import signal
+# chi.set_loglevel('debug')
 
 
-@chi.app
-def dashboard(host='127.0.0.1', port=5000, rootdir='~', loglevel='debug'):
+@chi.experiment
+def chiboard(host='localhost', port=MAGIC_PORT, rootdir='',
+             loglevel='debug', logdir='~/.chi/dashboard', timeout=24*60*60, port_pool=""):
+  from flask import Flask, jsonify, send_from_directory, send_file
+  from chi.dashboard.server import Server
+  from chi.dashboard.util import rcollect
+  from chi.dashboard.util import get_free_port
+  from chi.logger import logger
+
+  import os
+  import signal
+  from time import time, sleep
+  from threading import Thread
+  from os.path import expanduser as expandu
+  from flask_socketio import SocketIO
+
+  def expanduser(p):
+    pa = expandu(p)
+    return pa if pa.startswith('/') else '/' + pa
+
+  assert loglevel == 'debug'
   chi.set_loglevel(loglevel)
 
   if port == 0:
     port = get_free_port(host)
-  else:
-    solo = False
-    while not solo:
-      pid = port2pid(port)
-      if pid:
-        os.kill(pid[0], signal.SIGTERM)
-        logger.info('restarting chiboard')
-      else:
-        solo = True
-      # TODO: timeout
+    print(f'{port}')
 
   p = os.path.dirname(os.path.realpath(__file__))
   app = Flask(__name__, root_path=p, static_url_path='/')
 
+  socketio = SocketIO(app)
 
-  server = Server(host, port, rootdir)
+  if rootdir == '':
+    import os
+    rootdir = os.environ.get('CHI_ROOTDIR') or '~'
+    logger.debug('Rootdir: ' + rootdir)
 
-  remotes = {}  # spin up all ssh servers in a config
+  if port_pool:
+    port_pool = [int(p) for p in port_pool.split(',')]
+  else:
+    port_pool = range(port + 1, port + 30)
+
+  server = Server(host, port, rootdir, port_pool)
+
+  remotes = []
+  p = expanduser('~/.chi/dashboard/remotes.json')
+  if os.path.exists(p):
+    with open(p) as f:
+      remotes = json.load(f)
+      # print(remotes)
+
+  state = dict(last_request=time())
+
+  def killer():
+    while time() - state['last_request'] < timeout:
+      sleep(2)
+    logger.error('timeout')
+    os.kill(os.getpid(), signal.SIGINT)  # kill self
+
+  Thread(target=killer, daemon=True).start()
+
+  @app.before_request
+  def tick():
+    state.update(last_request=time())
 
   @app.route("/")
   def index():
@@ -56,7 +94,7 @@ def dashboard(host='127.0.0.1', port=5000, rootdir='~', loglevel='debug'):
   @app.route("/info/<string:host>/<path:path>")  # experiment page
   def info(host, path):
     if host == 'local':
-      return jsonify(server.info('/'+path))
+      return jsonify(server.info(expanduser(path)))
     else:
       raise Exception('Remote not yet supported')
       # request remote info
@@ -65,11 +103,16 @@ def dashboard(host='127.0.0.1', port=5000, rootdir='~', loglevel='debug'):
   @app.route("/logs/<path:path>")
   def logs(path):
     data = []
-    for p in rcollect('/'+path+'/chi-logs', 0):
+    for p in rcollect(expanduser(path) + '/chi-logs', 0):
       with open(p, 'r') as f:
+        f.seek(0, os.SEEK_END)
+        l = f.tell()
+        f.seek(max((0, l - 50000)), 0)
         c = f.read()
+        while c and c[-1] == '\n':
+          c = c[:-1]
         # c = c.replace('\n', '<br>')
-        c = c.replace('<', '&lt;')
+        # c = c.replace('<', '&lt;')
         data.append({'name': os.path.basename(p), 'content': c})
 
     return jsonify(data)
@@ -77,7 +120,7 @@ def dashboard(host='127.0.0.1', port=5000, rootdir='~', loglevel='debug'):
   @app.route("/tb/<string:host>/<path:path>")
   def tb(host, path):
     if host == 'local':
-      return jsonify(server.tensorboard('/'+path))
+      return jsonify(server.tensorboard(expanduser(path)))
     else:
       raise Exception('Remote not yet supported')
       # make local port forward
@@ -86,20 +129,19 @@ def dashboard(host='127.0.0.1', port=5000, rootdir='~', loglevel='debug'):
 
   @app.route("/delete/<path:path>")
   def delete(path):
-    return jsonify(server.delete('/'+path))
+    return jsonify(server.delete(expanduser(path)))
 
   @app.route("/trend/<path:path>")
   def trend(path):
-    sio = server.trend('/'+path)
-    return send_file(sio,  attachment_filename='trend.png', mimetype='image/png')
+    sio = server.trend('/' + path)
+    return send_file(sio, attachment_filename='trend.png', mimetype='image/png')
 
-  @app.route('/experiments')
-  def experiments():
-    s = server.experiments()
+  @app.route("/<string:cmd>/<path:path>")
+  def command(cmd, path):
+    return jsonify(server.command(cmd, expanduser(path)))
 
-    # add remotes
-    # update their hostids
-
-    return jsonify(s)
-
-  app.run(host=host, port=port)
+  try:
+    socketio.on_namespace(server)
+    socketio.run(app, host=host, port=port, log_output=loglevel == 'debug')
+  finally:
+    server.shutdown()
