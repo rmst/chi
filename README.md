@@ -1,5 +1,5 @@
 
-### CHI --- Tools for advanced deep learning with TensorFlow
+### CHI – Tools for advanced deep learning with TensorFlow
 
 
 
@@ -10,9 +10,9 @@
 
 - __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/experiments.py), defining [models](examples/models.py) and running [tensorflow functions](examples/functions.py).
 
-- __Flexibility.__ Models are arbitrary TensorFlow (sub-)graphs and multiple models can be trained at the same time with respect to each other which is the basis for actor-critic systems and adversarial training.
+- __Flexibility.__ Models can be arbitrary functions and multiple models can be trained at the same time with respect to each other. That makes it easy to implement actor-critic systems or adversarial training.
 
-- __Compliance__. Everything is built and compliant with standard tensorflow mechanisms such as *scopes*, *collections* and the *[keras layers API](https://www.tensorflow.org/api_guides/python/contrib.layers)*.
+- __Compliance.__ Everything is built and compliant with standard tensorflow mechanisms such as *scopes*, *collections* and the *[keras layers API](https://www.tensorflow.org/api_guides/python/contrib.layers)*.
 
 - __Separate models and algorithms.__ 
 
@@ -31,14 +31,14 @@ def my_tf_fun(x, y):
   return z
 ```
 
-That automatically builds the graph and creates placeholders for x and y. To compute `z` just call `my_tf_fun(3, 5)  # returns 15.0 `. It is also possible to specify shape and dtype of the parameters. See [examples/functions.py for more](expamples/functions.py).
+That automatically builds the graph and creates placeholders for x and y. To compute `z` just call `my_tf_fun(3, 5)  # returns 15.0 `. It is also possible to specify shape and dtype of the parameters. See [examples/functions.py for more](examples/functions.py).
 
 
 __Defining Models__ works similarly, except that the builder function remains a builder function that automatically shares weights.
 
 ```python
 @chi.model
-def my_model(x: (None, 28*28)):  # specifies shape as (None, 28*28)
+def my_digit_classifier(x: (None, 28*28)):  # specifies shape as (None, 28*28)
   x = layers.fully_connected(x, 100)
   z = layers.fully_connected(x, 10, None)
   p = layers.softmax(z)
@@ -54,7 +54,7 @@ __Experiment Scripts__ can also be defined via decorator. When run from the comm
 ```
 See [examples/experiments.py for the full example](examples/experiments.py)
 
-For a more advanced example see the [Wasserstein GAN example](/examples/wgan.py).
+For a more interesting experiment see the [Wasserstein GAN example](/examples/wgan.py).
 
 --------------------------
 
@@ -77,7 +77,7 @@ Requires Python 3.6
 
 ```
 git clone git@github.com:rmst/chi.git
-pip install -e ./chi
+pip install -e chi
 ```
 
 ---------------------------
