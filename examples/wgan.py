@@ -10,16 +10,12 @@ chi.set_loglevel('debug')
 
 
 @chi.experiment
-def wgan_conv(self: chi.Experiment, alpha=5e-5, c=.01, m=64, n_critic=5, logdir=None, curbed=True):
+def wgan_conv(self: chi.Experiment, alpha=5e-5, c=.01, m=64, n_critic=5, logdir=None):
   import tensorflow as tf
   import numpy as np
   from tensorflow.contrib import layers
   from tensorflow.contrib import learn
   from tensorflow.contrib.framework import arg_scope
-
-  if curbed:
-    tf.InteractiveSession(config=tf.ConfigProto(inter_op_parallelism_threads=4,
-                                                intra_op_parallelism_threads=2))
 
   def leaky_relu(x, alpha=0.1):
     return tf.maximum(tf.minimum(0.0, alpha * x), x)

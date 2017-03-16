@@ -1,14 +1,14 @@
 
-### CHI --- Tools for advanced* deep learning with TensorFlow
+### CHI --- Tools for advanced deep learning with TensorFlow
 
-*fjdkslafjkdsla
+
 
 --------------------------
 
 
 ### Guiding principles
 
-- __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/c_experiments.py), defining [models](examples/b_models.py) and running [tensorflow functions](examples/a_functions.py).
+- __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/experiments.py), defining [models](examples/models.py) and running [tensorflow functions](examples/functions.py).
 
 - __Flexibility.__ Models are arbitrary TensorFlow (sub-)graphs and multiple models can be trained at the same time with respect to each other which is the basis for actor-critic systems and adversarial training.
 
