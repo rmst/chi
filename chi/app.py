@@ -7,7 +7,6 @@ import signal
 
 import sys
 
-import chi
 from inspect import Parameter
 
 
@@ -24,11 +23,23 @@ class SigtermException(BaseException):
 
 
 @contextmanager
+def sigint_exception():
+  original_handler = signal.getsignal(signal.SIGINT)
+
+  def handle_sigint(signum, frame):
+    print('- sigint -')
+    sys.exit()
+
+  try:
+    signal.signal(signal.SIGINT, handle_sigint)
+    yield
+  finally:
+    signal.signal(signal.SIGINT, original_handler)
+
+
+@contextmanager
 def sigterm_exception():
   original_handler = signal.getsignal(signal.SIGTERM)
-
-  t = threading.current_thread()
-  # print('fdksfdskfkdsfds', t)
 
   def handle_sigterm(signum, frame):
     print('- sigterm -')
@@ -59,7 +70,7 @@ class App:
     args = {n: a for n, a in zip(self.native_params, args)}
     assert not set(args.keys()).intersection(kwargs.keys())  # conflicting args and kwargs
     kwargs.update(args)
-    with sigterm_exception():
+    with sigterm_exception(), sigint_exception():
       return self._run(**kwargs)
 
   def _run(self, **kwargs):

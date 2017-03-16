@@ -1,18 +1,7 @@
-import tensorflow as tf
-import numpy as np
-# import types
-from contextlib import contextmanager
-import os.path as path
-import random
 from .logger import logger, logging
-import inspect
-
-from tensorflow.contrib import layers
-from tensorflow.contrib import framework as fw
-# fw.arg_scope
-from . import chi
 from . import util
-from .argscope import argscope
+import tensorflow as tf
+from .main import chi
 
 
 class SubGraph:
@@ -29,6 +18,7 @@ class SubGraph:
     :param default_name:
     :param getter: (relative_name) -> tf.Variable
     """
+
     self._reused_variables = []
     self._children = []
     self._getter = getter

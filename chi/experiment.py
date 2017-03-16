@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import threading
@@ -10,27 +11,32 @@ from .app import App, SigtermException
 from .function import Function
 from .logger import logger, capture_std
 
+CONFIG_NAME = 'chi_experiment.json'
 
-def experiment(f=None, local_dependencies=None, start_dashboard=False):
+
+def experiment(f=None, local_dependencies=None, start_chiboard=True):
   """
   Decorator that transforms the decorated function into a chi.Experiment
+  :param start_chiboard:
   :param f:
   :param local_dependencies:
   :return:
   """
+  if not f:
+    return lambda f: experiment(f, local_dependencies, start_chiboard)
+  else:
+    if sys.modules[f.__module__].__name__ == '__main__':
+      a = Experiment(f, local_dependencies, start_chiboard)
+      a.parse_args_and_run()
 
-  if sys.modules[f.__module__].__name__ == '__main__':
-    a = Experiment(f)
-    a.parse_args_and_run()
-
-  return lambda *a, **kw: Experiment(f).run(*a, **kw)
+    return Experiment(f, local_dependencies, start_chiboard).run
 
 
 class Experiment(App):
-  def __init__(self, f, local_dependencies=None, start_dashboard=False):
+  def __init__(self, f, local_dependencies=None, start_chiboard=True):
     chi.set_loglevel('debug')
     super().__init__(f)
-    self.start_dashboard = start_dashboard
+    self.start_chiboard = start_chiboard
     self.f = f
     self.local_dependencies = local_dependencies or []
     self.should_stop = False
@@ -74,7 +80,7 @@ class Experiment(App):
   def _run(self, **kwargs):
     # print('_run')
     logger.debug(kwargs)
-    rem = kwargs.get("remote")
+    rem = kwargs.get("scripts")
     if rem and "@" in rem:
       kwargs.update(remote='None')
       return self.run_remote(rem, kwargs)
@@ -98,7 +104,7 @@ class Experiment(App):
   def _run_daemon(self, kwargs):
     # print('_run_daemon')
     script = sys.modules[self.f.__module__].__file__
-    lp = kwargs['logdir'] + '/chi-logs'
+    lp = kwargs['logdir'] + '/logs'
     # mkdirs(lp)
     run_daemon(script, kwargs)
     sys.exit(0)
@@ -106,7 +112,7 @@ class Experiment(App):
   def _run_local(self, kwargs):
     # print('_run_local')
     self.logdir = kwargs['logdir']
-    self.config = Config(self.logdir + '/experiment.chi')
+    self.config = Config(join(self.logdir, CONFIG_NAME))
     self.config.update(t_creation=time.time(), name=self.f.__name__)
     self.config.update(sys_argv=self.argv, sys_executable=sys.executable,
                        status='running')
@@ -120,22 +126,22 @@ class Experiment(App):
     self.config.update(env=dict(os.environ))
     threading.Thread(target=self.heartbeat, daemon=True).start()
 
-    if self.start_dashboard:
-      self.start_chiboard()
+    if self.start_chiboard:
+      self.run_chiboard()
 
-    logs = join(self.logdir, 'chi-logs')
+    logs = join(self.logdir, 'logs')
     mkdirs(logs)
 
     # noinspection PyArgumentList
     with Function(logdir=self.logdir, _experiment=self), capture_std(join(logs, 'stdout')):
       try:
         result = super()._run(**kwargs)
-        self.config.update(end = 'success')
+        self.config.update(end='success')
       except KeyboardInterrupt:
-        self.config.update(end = 'sigint')
+        self.config.update(end='sigint')
         raise
       except SigtermException:
-        self.config.update(end = 'sigterm')
+        self.config.update(end='sigterm')
         raise
       finally:
         self.config.update(status='dead', t_end=time.time())
@@ -143,23 +149,47 @@ class Experiment(App):
     return result
 
   def heartbeat(self):
-    while 1:
+    while True:
       self.config.update({})
       time.sleep(60)
 
-  def start_chiboard(self):
+  def run_chiboard(self):
     pass
-    # import subprocess
-    # from chi import dashboard
-    # port = dashboard.MAGIC_PORT
-    # r = dashboard.port2pid(port)
-    # if not r:
-    #   from chi.dashboard import main
-    #   chiboard = main.__file__
-    #   subprocess.Popen([sys.executable, chiboard, '--port', str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    #
-    # logger.info("{} started. Check progress at http://localhost:{}/exp/#/local{}".format(self.f.__name__, port, self.logdir))
+    import subprocess
+    from chi import board
+    from chi.board import CHIBOARD_HOME, MAGIC_PORT
+
+    port = None
+    start = False
+    cbc = join(CHIBOARD_HOME, CONFIG_NAME)
+    if os.path.isfile(cbc):
+      with open(cbc) as f:
+        import fcntl
+        try:
+          fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+          start = True
+          fcntl.flock(f, fcntl.LOCK_UN)
+        except BlockingIOError:  # chiboard is running
+          try:
+            data = json.load(f)
+            port = data.get('port')
+          except json.JSONDecodeError:
+            port = None
+
+    else:
+      start = True
+
+    if start:
+      from chi.board import main
+      chiboard = main.__file__
+      subprocess.check_call([sys.executable, chiboard, '--port', str(MAGIC_PORT), '--daemon'])
+      port = MAGIC_PORT
+
+    if port is None:
+      logger.warning('chiboard seems to be running but port could not be read from its config')
+    else:
+      logger.info(f"{self.f.__name__} started. Check progress at http://localhost:{port}/exp/#/local{self.logdir}")
 
   def run_remote(self, address, kwargs):
     # transfer files and execute remotely
-    pass
+    raise NotImplementedError()

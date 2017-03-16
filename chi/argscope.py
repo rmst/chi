@@ -4,6 +4,8 @@ import types
 argstack = []
 
 
+# TODO: make argscope explicit
+
 def argscope(f):
   """
   Annotating functions or classes with this decorator allows to create scopes

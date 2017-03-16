@@ -7,15 +7,15 @@ if sys.version_info < (3, 6):
 
 setup(name='chi',
       version='0.2',
-      description='Elegant TensorFlow',
+      description='',
       author='Simon Ramstedt',
       author_email='simonramstedt@gmail.com',
       url='https://github.com/rmst/chi',
       download_url='',
       license='MIT',
-      install_requires=['tensorflow>=1.0', 'matplotlib>=2.0', 'flask>=0.12', 'flask_socketio', 'watchdog'],
+      install_requires=['tensorflow>=1.0.1', 'matplotlib>=2.0', 'flask>=0.12', 'flask_socketio', 'watchdog'],
       extras_require={
-          'gym': ['gym'],
+          'rl': ['gym'],
       },
-      scripts=['bin/chiboard'],
+      scripts=['scripts/chiboard'],
       packages=find_packages())

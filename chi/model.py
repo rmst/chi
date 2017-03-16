@@ -147,11 +147,19 @@ class Model(SubGraph):
     assert self._last_graph
     items = self._last_graph.get_collection(name)
 
-    reused = self._last_graph._get_reused_variables()
+    reused = (
+      self._last_graph._get_reused_variables() +
+      self._first_graph.regularization_losses()
+    )
     fcol = self._first_graph.get_collection(name)
     # print(reused, fcol)
     items += set(reused) & set(fcol)
 
+    return items
+
+  def regularization_losses(self):
+    items = super().regularization_losses()
+    items += self._first_graph.regularization_losses()
     return items
 
 

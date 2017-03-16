@@ -116,34 +116,6 @@ def expanduser(path: str):
   return path.replace('~', '/home/'+path.split('@')[0]) if is_remote(path) else os.path.expanduser(path)
 
 
-# def join(a: str, b):
-#   return a+b if a.endswith('/') else a + '/' + b
-
-
-def write_config(path, data):
-  path = join(path, 'experiment.chi')
-  if is_remote(path):
-    import tempfile
-    tf = tempfile.NamedTemporaryFile()
-    with open(tf.name, 'w+') as f:
-      json.dump(data, f, indent=1)
-    subprocess.call(["scp", tf.name, path])
-
-  else:
-    with open(path, 'w+') as f:
-      json.dump(data, f, indent=1)
-
-
-def read_config(path):
-  path = join(path, 'experiment.chi')
-  if is_remote(path):
-    adr, path = path.split(':')
-    return json.loads(subprocess.check_output(["ssh", "cat {}".format(path)]))
-  else:
-    with open(path) as f:
-      return json.load(f)
-
-
 def is_remote(path):
   return path.find('@') != -1
 
@@ -179,7 +151,7 @@ def mkdirs(path):
 
 
 def copydir(src, dst, with_src=True):
-  # Example call: scp -r foo your_username@remotehost.edu:/some/remote/directory/bar
+  # Example call: scp -r foo your_username@remotehost.edu:/some/scripts/directory/bar
   # print("Transfering files ...")
   mkdirs(dst)
   if not with_src:

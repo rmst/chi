@@ -1,1 +1,1 @@
-from .memory import ReplayMemory
+from chi.rl.memory import ReplayMemory
