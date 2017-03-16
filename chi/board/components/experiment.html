@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- <base href="/"> -->
+  <title>chiboard</title>
+  <link href="/bower_components/polymer/polymer.html" rel="import">
+  <link href="/bower_components/iron-ajax/iron-ajax.html" rel="import" >
+  <link href="/bower_components/paper-toolbar/paper-toolbar.html" rel="import" >
+  <link rel="import" href="/bower_components/paper-header-panel/paper-header-panel.html">
+  <link href="/bower_components/paper-button/paper-button.html" rel="import" >
+  <link href="/bower_components/paper-card/paper-card.html" rel="import" >
+  <link href="/bower_components/app-route/app-route.html" rel="import" >
+  <link rel="import" href="/bower_components/iron-icons/iron-icons.html">
+  <script src="/bower_components/webcomponentsjs/webcomponents-lite.min.js"></script>
+  <script src="/bower_components/jquery/jquery.min.js"></script>
+
+  <link rel="import" href="/bower_components/iron-flex-layout/iron-flex-layout-classes.html">
+  <link rel="import" href="/bower_components/paper-tabs/paper-tabs.html">
+
+  <!-- <link rel="import" href="/bower_components/paper-tabs//paper-tab.html"> -->
+  <link rel="import" href="/bower_components/iron-pages/iron-pages.html">
+
+
+  <style>
+  html, body{
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+</style>
+</head>
+
+<body>
+
+<experiment-page> </experiment-page>
+
+<dom-module id="experiment-page">
+  <style type="text/css">
+    :host{
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      box-sizing: content-box;
+    };
+
+    .toolb{
+      --paper-toolbar-height: 50px;
+      z-index: 10005;
+      box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+    };
+
+    .font{
+      font-size: 30px;
+      font-weight: normal;
+      text-decoration: none;
+      text-shadow: -.1px -.1px rgba(0,0,0,.1);
+      font: Roboto,sans-serif;
+      font-style: normal;
+      font-variant-ligatures: normal;
+      font-variant-caps: normal;
+      font-variant-numeric: normal;
+      font-weight: 400;
+      font-stretch: normal;
+      font-size: 30px;
+      font-family: Roboto, sans-serif;
+      color: white;
+
+  	};
+
+
+    .cont{
+      overflow: hidden;
+
+    };
+
+    #tb{
+      /*overflow: hidden;*/
+      height: calc(100% + 10px);
+      width: 100%;
+      margin-top: -10px;
+      padding: 0;
+    };
+
+    #jupyter{
+      height: calc(100% + 95px);
+      width: 100%;
+      margin-top: -95px;
+      padding: 0;
+    };
+
+    .log-page{
+			margin: 0;
+			height: 100%;
+			width: 100%;
+			padding: 5px;
+			box-sizing: border-box;
+			display: flex;
+			background-color: darkgrey;
+			flex-flow: column wrap;
+
+			flex-flow: center;
+			overflow: auto;
+
+    };
+
+    paper-tabs{
+      margin-left: 30px;
+    };
+    
+    iron-pages{
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    .page{
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    };
+
+    #details{
+      font-family: "Lucida Console", Monaco, monospace;
+      color: black;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      box-sizing: border-box;
+
+      padding: 15px;
+    }
+
+
+  </style>
+
+  <template>
+  <paper-header-panel>
+    <paper-toolbar class="toolb">
+      <!--<paper-icon-button icon="menu" on-tap="menuAction"></paper-icon-button>-->
+      <a class="font" href="/">chiboard</a>
+      <div class="font" style="font-size: 20px; padding-left: 10px;">/ {{details.name}}</div>
+
+      <paper-tabs selected="{{selected}}">
+			  <paper-tab>Logs</paper-tab>
+			  <paper-tab>Details</paper-tab>
+        <paper-tab>TensorBoard</paper-tab>
+        <paper-tab>Files</paper-tab>
+			</paper-tabs>
+
+    </paper-toolbar>
+
+    <iron-pages class="" selected="{{selected}}">
+		  <div class="log-page">
+        <template is="dom-repeat" items="[[logs]]">
+          <log-view data=[[item]]></log-view>
+	  		</template>
+	  	</div>
+
+    	<div class="page">
+    		<pre id="details" class="">{{detailsc}}</pre>
+    	</div>
+
+		  <div class="page">
+        <template is="dom-if" if="{{no_event_files}}">
+          <div style="height: 100%; width:100%; padding-top: 109px; text-align: center;">
+            No event files
+          </div>
+        </template>
+        <template is="dom-if" if="{{ef}}">
+				  <!-- <div style="height:40px"></div> -->
+		  	 <iframe id="tb" src="{{framesrc}}"></iframe>
+        </template>
+		  </div>
+
+      <div class="page">
+        <template is="dom-if" if="{{jupyter}}">
+          <iframe id="jupyter" src="http://localhost:{{details.jupyter_port}}/tree{{details.alternate_path}}"></iframe>
+        </template>
+      </div>
+
+		</iron-pages>
+
+	</paper-header-panel>
+  </template>
+
+  <script>
+	Polymer({
+    is: 'experiment-page',
+
+    properties: {
+	    selected: {
+        value: 0,
+        notify: true,
+	    },
+
+	    logs: Array,
+
+      detailsc: {
+        type: String,
+        notify: true,
+      },
+
+      details: {
+        type: Object,
+        notify: true,
+      },
+
+      jupyter: Boolean,
+
+      framesrc: {
+        value: "",
+        notify: true,
+      },
+      ef: Boolean,
+      no_event_files: Boolean,
+    },
+
+    ready: ()=>{
+      // tensorboard
+
+      var frame = this.myiframe
+      // frame._empty = true
+
+      $('#myiframe').on('load', ()=>{
+        console.log('loaded '+frame.src)
+      })
+
+
+    },
+
+    created: function(){
+      var self = this
+
+    	// details
+      var req_details = function(){
+      	loc = window.location.hash.split('/')
+      	// host = loc[1] == 'local' ? window.location.host : loc[1]
+      	host = window.location.host
+        url = 'http://' + host + '/info/' + loc.slice(1).join('/')   
+      	console.log('details url: ' + url)
+
+        $.getJSON(url, data => {
+          console.log('got details')
+          console.log(data)
+          document.title = data.name
+
+          self.detailsc = JSON.stringify(data, undefined, 2);
+
+          self.details = data
+          self.jupyter = data.jupyter_port != -1
+        })
+ 			}
+
+      req_details()
+      setInterval(req_details, 5000)
+
+
+      // logs
+      var req_logs = function(){
+      	loc = window.location.hash.split('/')
+      	host = loc[1] == 'local' ? window.location.host : loc[1]
+        url = 'http://' + host + '/logs/' + loc.slice(2).join('/')   
+      	console.log('logs url: ' + url)
+
+        $.getJSON(url, data => {
+          console.log('got logs ' + data.length)
+
+          self.logs = data
+        })
+ 			}
+
+      req_logs()
+      setInterval(req_logs, 5000)
+
+
+      // tensorboard
+      var req_tb = function(){ 
+        url = '/tb/' + window.location.hash.split('/').slice(1).join('/')   
+        $.getJSON(url, data => {
+          console.log('got tb', data)
+          self.no_event_files = data.no_event_files
+          self.ef = ! data.no_event_files
+          if(self.ef){
+            src = 'http://'+data.host+':'+data.port
+            if(self.framesrc == "" || data.new){
+
+              self.framesrc = src
+              self.selected = 2
+              // frame._empty = false
+            }
+          }
+
+        });
+      }
+
+      req_tb()
+      setInterval(req_tb, 5000);
+
+
+    },
+
+  });
+  </script>
+</dom-module>
+
+<dom-module id="log-view">
+<style type="text/css">
+	:host{
+    flex: 1;
+    min-width: 500px;
+    /*max-width: 800px;*/
+    min-height: 300px;
+    /*max-height: 800px;*/
+    overflow: hidden;
+    box-shadow: 0 0 4px rgba(0,0,0,.15), 0 4px 8px rgba(0,0,0,.30);
+    margin: 5px;
+
+		background-color: black;
+
+	};
+
+	paper-toolbar{
+    --paper-toolbar-background: #01A35E;
+    --paper-toolbar-height: 30px;
+	};
+
+
+	#log{
+		font-family: "Lucida Console", Monaco, monospace;
+		color: lightgrey;
+		width: 100%;
+		height: 100%;
+		overflow: auto;
+		box-sizing: border-box;
+		padding: 15px;
+
+	};
+
+  pre{
+    white-space: pre-wrap;
+    word-break: keep-all;
+  }
+</style>
+
+<template>
+	<paper-header-panel mode="seamed">
+	  <paper-toolbar>
+	  	<div id="title" class="title">[[data.name]]</div>
+  	</paper-toolbar>
+	 <div id="log">
+    <pre id="content">
+      <!-- [[data.content]] -->
+    </pre>
+   </div>
+  </paper-header-panel>
+</template>
+
+<script type="text/javascript">
+
+Polymer({
+  is: 'log-view',
+
+  properties: {
+    data: {
+    	type: Object,
+      notify: true
+    },
+
+  },
+
+  ready: function(){
+ 		var log = this.$.log
+    Polymer.RenderStatus.afterNextRender(this, () => {
+      this.$.content.innerHTML = this.data.content
+      log.scrollTop = log.scrollHeight;
+    })
+    console.log('ready')
+
+ 		this.$.log._should_scroll = true
+ 		log.onscroll = ()=>{
+ 			this.$.log._should_scroll = log.scrollHeight-log.scrollTop == log.clientHeight
+ 			// console.log(this.$.log._should_scroll)
+ 		}
+  	this.addEventListener("data-changed", ()=>{
+			console.log('data-changed')
+  		// this.$.title.innerHTML = this.data.name
+  		
+  		if(this.$.log._should_scroll){
+  			console.log('scroll')
+        this.$.content.innerHTML = this.data.content
+	      Polymer.RenderStatus.afterNextRender(this, () => {
+    			log.scrollTop = log.scrollHeight;
+    		})
+  		}
+
+  	})
+
+  },
+
+});
+</script>
+</dom-module>
+
+
+</body>
+</html>
+
+

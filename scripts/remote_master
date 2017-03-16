@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+import chi
+from chi.board import MAGIC_PORT, port2pid
+
+
+# Method from:
+# http://blog.darkstarsword.net/2012/02/ssh-passwordless-login-without-public.html
+
+
+@chi.experiment
+def remote_master(self: chi.Experiment, address, password):
+  import subprocess
+  from chi.util import cmd_args
+  from chi.board.util import get_free_port
+  from chi.board.util import check_free
+
+  self.config.name = 'remote_master' + address.split('@')[1]
+
+  cmd = ['sshpass', '-p', password,
+         'ssh', address,
+         '-M',  # master
+         '-N',  # do nothing
+         ]
+  print(cmd)
+  p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+  try:
+    while True:
+      line = p.stdout.readline()
+      if not line:
+        break
+      print(line[:-1])
+    retval = p.wait()
+    return retval
+  finally:
+    print('terminate ssh')
+    p.kill()
