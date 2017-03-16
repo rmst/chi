@@ -1,5 +1,5 @@
 
-### CHI – Tools for advanced deep learning with TensorFlow
+### CHI – A high-level framework for advanced deep learning with TensorFlow
 
 
 
@@ -8,13 +8,13 @@
 
 ### Guiding principles
 
-- __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/experiments.py), defining [models](examples/models.py) and running [tensorflow functions](examples/functions.py).
+- __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/experiments.py), defining [models](examples/models.py) and running [TensorFlow graphs](examples/functions.py).
 
 - __Flexibility.__ Models can be arbitrary functions and multiple models can be trained at the same time with respect to each other. That makes it easy to implement actor-critic systems or adversarial training.
 
-- __Compliance.__ Everything is built and compliant with standard tensorflow mechanisms such as *scopes*, *collections* and the *[keras layers API](https://www.tensorflow.org/api_guides/python/contrib.layers)*.
+- __Compliance.__ Everything is built and compliant with standard TensorFlow mechanisms such as *scopes*, *collections* and the *[keras layers API](https://www.tensorflow.org/api_guides/python/contrib.layers)*.
 
-- __Separate models and algorithms.__ 
+- __Separate models and algorithms.__
 
 
 ---------------------------
@@ -22,7 +22,7 @@
 ### Getting started
 
 
-__Building and Running TensorFlow Graphs__. This in one step by writing a normal graph builder function and wrapping it with `chi.function`:
+__Building and Running TensorFlow Graphs__. This is done in one step by writing a normal graph builder function and wrapping it with `chi.function`:
 
 ```python
 @chi.function
@@ -33,6 +33,7 @@ def my_tf_fun(x, y):
 
 That automatically builds the graph and creates placeholders for x and y. To compute `z` just call `my_tf_fun(3, 5)  # returns 15.0 `. It is also possible to specify shape and dtype of the parameters. See [examples/functions.py for more](examples/functions.py).
 
+<br>
 
 __Defining Models__ works similarly, except that the builder function remains a builder function that automatically shares weights.
 
@@ -48,6 +49,8 @@ def my_digit_classifier(x: (None, 28*28)):  # specifies shape as (None, 28*28)
 
 See [examples/models.py for the full example (classifying hand-written digits)](examples/models.py).
 
+<br>
+
 __Experiment Scripts__ can also be defined via decorator. When run from the command line the function arguments are translated into command line parameters.
 ```python
 
@@ -59,7 +62,7 @@ For a more interesting experiment see the [Wasserstein GAN example](/examples/wg
 --------------------------
 
 ### Visualization with CHIBOARD
-Chiboard is a web-based dashboard for managing experiments. Start it with `chiboard`.
+Chiboard is a browser based dashboard for managing experiments. Start it with `chiboard`.
 
 <img src="./assets/cb.png" width="100%">
 
