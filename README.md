@@ -1,14 +1,14 @@
 
 ### CHI – A high-level framework for advanced deep learning with TensorFlow
 
-
+Chi provides high-level operations for writing and visualizing experiments, defining models and running TensorFlow graphs.
 
 --------------------------
 
 
 ### Guiding principles
 
-- __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/experiments.py), defining [models](examples/models.py) and running [TensorFlow graphs](examples/functions.py).
+- __No boilerplate.__ Minimize the amount of overhead when writing [experiment scripts](examples/experiments.py), defining [models](examples/models.py) or running arbitrary [TensorFlow graphs](examples/functions.py).
 
 - __Flexibility.__ Models can be arbitrary functions and multiple models can be trained at the same time with respect to each other. That makes it easy to implement actor-critic systems or adversarial training.
 
@@ -53,9 +53,12 @@ See [examples/models.py for the full example (classifying hand-written digits)](
 
 __Experiment Scripts__ can also be defined via decorator. When run from the command line the function arguments are translated into command line parameters.
 ```python
-
+@chi.experiment
+def my_experiment(logdir, a=0.5):
+  print(logdir)
+  ...
 ```
-See [examples/experiments.py for the full example](examples/experiments.py)
+If no logdir is specified it will generate a new one. See [examples/experiments.py for the full example](examples/experiments.py)
 
 For a more interesting experiment see the [Wasserstein GAN example](/examples/wgan.py).
 
