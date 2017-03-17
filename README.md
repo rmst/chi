@@ -1,4 +1,6 @@
 
+<img src="./assets/cb.png" width="100%">
+
 ### CHI – A high-level framework for advanced deep learning with TensorFlow
 
 Chi provides high-level operations for writing and visualizing experiments, defining models and running TensorFlow graphs.
