@@ -71,19 +71,7 @@ class ReplayMemory:
     t = self.terminals[indices]
     info = self.info[indices, ...]
 
-    s = """
-    OBSERVATIONS
-    {}
-
-    ACTIONS
-    {}
-
-    REWARDS
-    {}
-
-    TERMINALS
-    {}
-    """.format(o, a, r, t)
+    s = f"Memory with n={self.n}, i={self.i}\nOBSERVATIONS\n{o}\n\nACTIONS\n{a}\n\nREWARDS\n{r}\n\nTERMINALS\n{t}\n"
 
     return s
 

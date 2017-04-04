@@ -18,6 +18,16 @@ from chi.logger import logger
 from .ops import after
 
 
+def apply_to_leaves(obj, fun):
+  if isinstance(obj, list):
+    return [apply_to_leaves(o, fun) for o in obj]
+  elif isinstance(obj, tuple):
+    return tuple(apply_to_leaves(o, fun) for o in obj)
+  elif isinstance(obj, dict):
+    return {k: apply_to_leaves(o, fun) for k, o in obj.items}
+  else:
+    return fun(obj)
+
 
 def ClippingOptimizer(opt: tf.train.Optimizer, low, high):
   original = opt.apply_gradients
@@ -39,7 +49,8 @@ def type_and_shape_from_annotation(an):
   if isinstance(an, tf.DType):
     return tf.as_dtype(an), None  # e.g.: myfun(x: float)
   elif isinstance(an, collections.Iterable):
-    if isinstance(an[0], tf.DType):
+    an = tuple(an)
+    if len(an) > 0 and isinstance(an[0], tf.DType):
       shape = shape_from_annotation(an[1])
       return tf.as_dtype(an[0]), shape  # e.g.: myfun(x: [float, (3, 5)])
     else:
@@ -50,10 +61,11 @@ def type_and_shape_from_annotation(an):
 
 
 def shape_from_annotation(an: collections.Iterable):
-  if isinstance(an[0], collections.Iterable):
+  an = tuple(an)
+  if len(an) > 0 and isinstance(an[0], collections.Iterable):
     return [None, *an[0]]  # e.g.: myfun(x: [[3, 5]])  # will be used for automatic batch dimension
   else:
-    return tuple(an)  # e.g.: myfun(x: (3, 5))  # return as tuple
+    return an  # e.g.: myfun(x: (3, 5))  # return as tuple
 
 
 def in_collections(var):

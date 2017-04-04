@@ -11,9 +11,9 @@ from chi.board import MAGIC_PORT, CHIBOARD_HOME
 # chi.set_loglevel('debug')
 
 
-@chi.experiment(start_chiboard=False)
+@chi.experiment(start_chiboard=False, default_logdir=CHIBOARD_HOME)
 def chiboard(self: chi.Experiment, host='localhost', port=MAGIC_PORT, rootdir='',
-             loglevel='debug', logdir=CHIBOARD_HOME, timeout=24*60*60, port_pool=""):
+             loglevel='debug', timeout=24*60*60, port_pool=""):
   from flask import Flask, jsonify, send_from_directory, send_file
   from chi.board.server import Server
   from chi.board.util import rcollect
@@ -46,7 +46,7 @@ def chiboard(self: chi.Experiment, host='localhost', port=MAGIC_PORT, rootdir=''
 
   if rootdir == '':
     import os
-    rootdir = os.environ.get('CHI_ROOTDIR') or '~'
+    rootdir = os.environ.get('CHI_EXPERIMENTS') or '~'
     logger.debug('Rootdir: ' + rootdir)
 
   if port_pool:

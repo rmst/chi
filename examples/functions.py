@@ -51,3 +51,15 @@ assert my_tf_fun(3, 5) == 15.
 # other than decorators, this does not break type inference and auto complete
 # actually i've filed an issue for that in PyCharm. It shouldn't be very hard to make that work:
 # https://youtrack.jetbrains.com/issue/PY-23060 (you can upvote it)
+
+
+# MORE ADVANCED STUFF
+
+# decaying the learning rate (or anything)
+@chi.function
+def g():
+  step = chi.function.step()  # returns a tf.Variable that counts how often g has been called
+  return tf.train.exponential_decay(1000., step, 10000, .001)
+
+for i in range(10000):
+  print(g())

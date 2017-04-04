@@ -4,7 +4,7 @@ from chi.board import port2pid
 
 
 @chi.experiment
-def remote_chiboard(self: chi.Experiment, address, port, max_connections=20, password=""):
+def remote_chiboard(self: chi.Experiment, address, port=-1, max_connections=20, password=""):
   import subprocess
   from chi.util import cmd_args
 

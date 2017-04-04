@@ -132,7 +132,7 @@
       <!-- <img id="trend" src="http://{{item.host}}:{{item.port}}/trend[[item.path]]?{{item.rand}}" onerror="" > -->
       </a>
       <div class="layout horizontal bar">
-        <paper-button>[[item.name]]</paper-button>
+        <paper-button>[[item.name]] [[_runtime(item)]]</paper-button>
         <div class="flex"></div>
         <paper-icon-button icon="refresh" on-tap="_runExp"></paper-icon-button>
         <paper-icon-button icon="close" on-tap="_killExp"></paper-icon-button>
@@ -155,7 +155,17 @@
         notify: true,
       },
     },
-
+    _runtime: item =>{
+      var out
+      try{
+        out = ((item.t_end - item.t_start) / 60. / 60.).toFixed(1)
+        out = '(' + out + ' h)'
+      }
+      catch(err) {
+        out = ""
+      }
+      return out
+    },
     ready: function(){
       // logs
       var self = this

@@ -6,7 +6,8 @@ from .subgraph import SubGraph
 from .function import Function
 from . import util
 import inspect
-from .util import in_collections
+from .util import in_collections, apply_to_leaves
+
 
 def model(f=None, reuse=None, optimizer=None, tracker=None, initializer=None, regularizer=None):
   """
@@ -67,7 +68,13 @@ class Model(SubGraph):
       return a
     kw = {n: filter_args(a, n, t, s, d) for a, (n, t, s, d) in zip(args, sig)}
     kw.update({n: filter_args(kwargs[n], n, t, s, d) for n, t, s, d in sig if n in kwargs})
-    return self._f(**kw)
+    out = self._f(**kw)
+
+    if self.tracker and self._first_graph is None:
+      self.after_update.append(self.tracker.apply(chi.trainable_variables()))
+
+    return out
+
 
   def _arg_spec(self, args, kwargs):
     sig = parse_signature(self._f)
@@ -86,16 +93,13 @@ class Model(SubGraph):
     v = vs.get(relative_name)
     if v and replacer:
       vn = replacer(v)
-
-      logger.debug(f'insert {vn.name} {in_collections(vn)} for {v.name} {in_collections(v)}')
-      v = vn
+      if vn:
+        logger.debug(f'insert {vn.name} {in_collections(vn)} for {v.name} {in_collections(v)}')
+        v = vn
     return v
 
   def tracked(self, *args, **kwargs):
     assert self.tracker and self._last_graph
-    if not self._tracker_active:
-      self._tracker_active = True
-      self.after_update.append(self.tracker.apply(self.trainable_variables()))
 
     def replacer(v):
       av = self.tracker.average(v)
@@ -104,7 +108,8 @@ class Model(SubGraph):
       return av
     getter = lambda name: self._getter(name, replacer)
     sg = SubGraph(lambda: self.build(*args, **kwargs), default_name=self.name+'_tracked', getter=getter)
-    return sg.output
+    out = apply_to_leaves(sg.output, lambda x: tf.stop_gradient(x) if isinstance(x, tf.Tensor) else x)
+    return out
 
   def minimize(self, losses, name=None, collections=None, **kwargs):
     with tf.name_scope('minimize'):
@@ -124,16 +129,20 @@ class Model(SubGraph):
         loss = tf.add_n([tf.reduce_sum(l) for l in losses], 'loss')
         tf.summary.scalar(name or self.name+"_loss", loss)
 
-      gav = self.optimizer.compute_gradients(loss, var_list=self.trainable_variables())
-      for g, v in gav:
-        tf.add_to_collection('chi_gradients', g)
+      var_list = self.trainable_variables()
+      if var_list:
+        gav = self.optimizer.compute_gradients(loss, var_list=var_list)
+        for g, v in gav:
+          tf.add_to_collection('chi_gradients', g)
 
-      with tf.variable_scope(self._scope):
-        sg = SubGraph(lambda: self.optimizer.apply_gradients(gav, name='apply_gradients'), default_name='minimize')
-        sg.initialize()
-        minimize = sg.output
+        with tf.variable_scope(self._scope):
+          sg = SubGraph(lambda: self.optimizer.apply_gradients(gav, name='apply_gradients'), default_name='minimize')
+          sg.initialize()
+          minimize = sg.output
+      else:
+        minimize = tf.no_op()
 
-      # self.after_update += chi.update_ops()
+      # self.after_update += self.update_ops()
 
       logger.info(f'"{self.name}" updating after optimization step:\n' +
                   '\n'.join([f'  {v.name} - {in_collections(v)}' for v in self.after_update]) + '\n')

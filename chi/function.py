@@ -1,4 +1,6 @@
 import tensorflow as tf
+
+from chi.util import in_collections
 from .subgraph import SubGraph
 from . import util
 import chi
@@ -59,7 +61,7 @@ class Function(SubGraph):
     self._built = True
 
     def scoped():
-      self._step = tf.get_variable('step', initializer=0, trainable=False)
+      self._step = tf.get_variable('step', initializer=0, trainable=False, dtype=tf.int32)
       self._advance = self._step.assign_add(1)
 
       out = self._f(**self.inputs)
@@ -68,7 +70,12 @@ class Function(SubGraph):
       summaries = super(Function, self).summaries()
       self._summary_op = tf.summary.merge(summaries) if summaries else None
 
-      self._output = tf.no_op(name='run') if out is None else out
+      output = tf.no_op(name='run') if out is None else out
+
+      logger.debug(f'Function {self.name} updating:\n' +
+                   '\n'.join([f'  {v.name} - {in_collections(v)}' for v in self.update_ops()]) + '\n')
+      out = chi.util.after(output, self.update_ops(), out)
+      self._output = out
 
       return out
 
@@ -90,6 +97,18 @@ class Function(SubGraph):
       self.writer = None
 
     super().initialize()
+
+    self.coordinator = tf.train.Coordinator()
+    self.queue_collection_key = self.name + 'queue_runners'
+    qr = self.get_collection(tf.GraphKeys.QUEUE_RUNNERS)
+    if qr:
+      logger.debug('Starting queue runners', qr)
+    for q in qr:
+      tf.add_to_collection(self.queue_collection_key, q)
+
+    self.queue_runners = tf.train.start_queue_runners(chi.chi.get_session(),
+                                                      self.coordinator,
+                                                      collection=self.queue_collection_key)
 
   # def __getattribute__(self, *args, **kwargs):
   #   ga = object.__getattribute__
@@ -137,12 +156,17 @@ class Function(SubGraph):
   def run_log(self, fetches, feeds):
     log = self._summary_op is not None and self.writer and self.logging_policy(self.step)
     fetches = (fetches, self._advance)
-    if log:
-      (results, step), summary = chi.chi.get_session().run((fetches, self._summary_op), feeds)
-      global_step = self._experiment.global_step if self._experiment else None
-      self.writer.add_summary(summary, global_step=global_step or step)
-    else:
-      results, step = chi.chi.get_session().run(fetches, feeds)
+    try:
+      if log:
+        (results, step), summary = chi.chi.get_session().run((fetches, self._summary_op), feeds)
+        global_step = self._experiment.global_step if self._experiment else None
+        self.writer.add_summary(summary, global_step=global_step or step)
+      else:
+        results, step = chi.chi.get_session().run(fetches, feeds)
+    except tf.errors.OutOfRangeError:
+      results = None
+      self.coordinator.request_stop()
+      self.coordinator.join(self.queue_runners)
 
     self.step = step
     return results
@@ -173,13 +197,25 @@ class Function(SubGraph):
   #     # if we are called directly from the class (not the instance) TODO: error?
   #     pass
 
+class FunctionBuilder:
+  def __call__(self, f=None, *args, **kwargs) -> Function:
+    """
+    Decorator that transforms the decorated function into a chi.Function
+    """
+    deco = lambda f: Function(f, *args, **kwargs)
+    return deco(f) if f else deco
 
-def function(f=None, *args, **kwargs) -> Function:
-  """
-  Decorator that transforms the decorated function into a chi.Function
-  """
-  deco = lambda f: Function(f, *args, **kwargs)
-  return deco(f) if f else deco
+  def stack(self):
+    return [sg for sg in SubGraph.stack if isinstance(sg, Function)]
+
+  def current(self) -> Function:
+    return self.stack()[-1]
+
+  def step(self):
+    return self.current()._step
+
+
+function = FunctionBuilder()
 
 
 def parse_signature(f):

@@ -7,7 +7,7 @@ import chi
 
 
 @chi.experiment  # automatically creates a unique logdir if not specified
-def my_experiment(logdir=None):
+def my_experiment(logdir, a=0.5):
   import tensorflow as tf
   from time import sleep
 
@@ -15,7 +15,7 @@ def my_experiment(logdir=None):
 
   @chi.function  # inherits logdir from experiment by default
   def my_function(i):
-    out = i + tf.random_normal([], stddev=i**.5)
+    out = i + tf.random_normal([], stddev=a)
 
     # summaries will be automatically written to an event file in the logdir
     # (according to a certain logging policy)

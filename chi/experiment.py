@@ -14,7 +14,7 @@ from .logger import logger, capture_std
 CONFIG_NAME = 'chi_experiment.json'
 
 
-def experiment(f=None, local_dependencies=None, start_chiboard=True):
+def experiment(f=None, local_dependencies=None, start_chiboard=True, default_logdir=""):
   """
   Decorator that transforms the decorated function into a chi.Experiment
   :param start_chiboard:
@@ -23,17 +23,17 @@ def experiment(f=None, local_dependencies=None, start_chiboard=True):
   :return:
   """
   if not f:
-    return lambda f: experiment(f, local_dependencies, start_chiboard)
+    return lambda f: experiment(f, local_dependencies, start_chiboard, default_logdir)
   else:
     if sys.modules[f.__module__].__name__ == '__main__':
-      a = Experiment(f, local_dependencies, start_chiboard)
+      a = Experiment(f, local_dependencies, start_chiboard, default_logdir)
       a.parse_args_and_run()
 
-    return Experiment(f, local_dependencies, start_chiboard).run
+    return Experiment(f, local_dependencies, start_chiboard, default_logdir).run
 
 
 class Experiment(App):
-  def __init__(self, f, local_dependencies=None, start_chiboard=True):
+  def __init__(self, f, local_dependencies=None, start_chiboard=True, default_logdir=""):
     chi.set_loglevel('debug')
     super().__init__(f)
     self.start_chiboard = start_chiboard
@@ -51,15 +51,15 @@ class Experiment(App):
                                    annotation="run in background"),
                   logdir=Parameter('logdir',
                                    Parameter.KEYWORD_ONLY,
-                                   default=""))
-    params.update(self.params)
-    self.params = params
+                                   default=default_logdir))
+    # params.update(self.params)
+    self.params.update(params)
 
   def filter_args(self, kwargs):
     logdir = kwargs.get("logdir")
 
     if not logdir:
-      rd = os.environ.get('CHI_ROOTDIR')
+      rd = os.environ.get('CHI_EXPERIMENTS')
       logdir = rd + '/+' if rd else '~/.chi/experiments/+'
 
     if logdir.endswith('/'):
@@ -112,41 +112,47 @@ class Experiment(App):
   def _run_local(self, kwargs):
     # print('_run_local')
     self.logdir = kwargs['logdir']
-    self.config = Config(join(self.logdir, CONFIG_NAME))
-    self.config.update(t_creation=time.time(), name=self.f.__name__)
-    self.config.update(sys_argv=self.argv, sys_executable=sys.executable,
-                       status='running')
-
-    # local execution
-    self.config.update(t_start=time.time(),
-                       pid=os.getpid(),
-                       args=kwargs)
-
-    self.config.update(slurm={k: v for k, v in os.environ.items() if k.startswith('SLURM_')})
-    self.config.update(env=dict(os.environ))
-    threading.Thread(target=self.heartbeat, daemon=True).start()
-
-    if self.start_chiboard:
-      self.run_chiboard()
-
     logs = join(self.logdir, 'logs')
     mkdirs(logs)
+    with capture_std(join(logs, 'stdout')):
 
-    # noinspection PyArgumentList
-    with Function(logdir=self.logdir, _experiment=self), capture_std(join(logs, 'stdout')):
-      try:
-        result = super()._run(**kwargs)
-        self.config.update(end='success')
-      except KeyboardInterrupt:
-        self.config.update(end='sigint')
-        raise
-      except SigtermException:
-        self.config.update(end='sigterm')
-        raise
-      finally:
-        self.config.update(status='dead', t_end=time.time())
+      self.config = Config(join(self.logdir, CONFIG_NAME))
+      self.config.update(t_creation=time.time(), name=self.f.__name__)
+      self.config.update(sys_argv=self.argv, sys_executable=sys.executable,
+                         status='running')
 
-    return result
+      # local execution
+      self.config.update(t_start=time.time(),
+                         pid=os.getpid(),
+                         args=kwargs)
+
+      self.config.update(slurm={k: v for k, v in os.environ.items() if k.startswith('SLURM_')})
+      self.config.update(env=dict(os.environ))
+      threading.Thread(target=self.heartbeat, daemon=True).start()
+
+      if self.start_chiboard:
+        self.run_chiboard()
+
+      # copy script for reference
+      from .util import copy
+      script = sys.modules[self.f.__module__].__file__
+      copy(script, self.logdir)
+
+      # noinspection PyArgumentList
+      with Function(logdir=self.logdir, _experiment=self):  # TODO: use explicit context manager instead
+        try:
+          result = super()._run(**kwargs)
+          self.config.update(end='success')
+        except KeyboardInterrupt:
+          self.config.update(end='sigint')
+          raise
+        except SigtermException:
+          self.config.update(end='sigterm')
+          raise
+        finally:
+          self.config.update(status='dead', t_end=time.time())
+
+      return result
 
   def heartbeat(self):
     while True:
@@ -169,7 +175,7 @@ class Experiment(App):
           fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
           start = True
           fcntl.flock(f, fcntl.LOCK_UN)
-        except BlockingIOError:  # chiboard is running
+        except (BlockingIOError, OSError):  # chiboard is running
           try:
             data = json.load(f)
             port = data.get('port')

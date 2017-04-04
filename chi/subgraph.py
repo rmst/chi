@@ -34,7 +34,8 @@ class SubGraph:
       self.name = sc.name
       SubGraph.stack.append(self)
       self.output = f()
-      self.init_op = tf.variables_initializer(self._init_vars())
+      self.init_op = tf.variables_initializer(self.local_variables() + self.global_variables())
+      self.init_local = tf.variables_initializer(self.local_variables())
       assert SubGraph.stack.pop() is self
 
       # self._init_check_op = tf.report_uninitialized_variables(self._init_vars())
@@ -52,17 +53,13 @@ class SubGraph:
 
     return v
 
-  def _init_vars(self):
-    l = self.local_variables()
-    g = self.global_variables()
-    # r = self._get_reused_variables()
-    # vs = l+g+r
-    return l+g
-
   def initialize(self):  # TODO: init from checkpoint
     # names = chi.get_session().run(self._init_check_op)
     # initvs = [v for v in self._init_vars() if v.name[:-2].encode() in names]
     chi.get_session().run(self.init_op)
+
+  def initialize_local(self):
+    chi.get_session().run(self.init_local)
 
   def _get_reused_variables(self):
     vs = self._reused_variables

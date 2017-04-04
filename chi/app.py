@@ -63,7 +63,7 @@ class App:
       # remove "self"
       self.params = OrderedDict(p for i, p in enumerate(sig.parameters.items()) if i > 0)
     else:
-      self.params = sig.parameters
+      self.params = OrderedDict(sig.parameters)
 
   def run(self, *args, **kwargs):
     # make all args kwargs
