@@ -1,3 +1,6 @@
+from queue import Queue
+from threading import Thread
+
 import tensorflow as tf
 
 from chi.util import in_collections
@@ -18,7 +21,9 @@ class Function(SubGraph):
   """
 
   """
+
   def __init__(self, f, logdir=None, logging_policy=None, scope=None,
+               prefetch_fctn=None, prefetch_capacity=1, async=False,
                _experiment=None, _arg_spec=None):
     """
 
@@ -27,29 +32,22 @@ class Function(SubGraph):
     :param args:
     :param kwargs:
     """
+    self._arg_spec = _arg_spec
+    self.prefetch_capacity = prefetch_capacity
+    self.prefetch_fctn = prefetch_fctn
     self.logging_policy = logging_policy
     self.logdir = logdir
     self._experiment = _experiment
     self._f = f
-
-    # process inputs
-    import collections
-    self.inputs = collections.OrderedDict()
-    self.auto_wrap = collections.OrderedDict()
-    for name, dtype, shape, default in parse_signature(f):
-      if _arg_spec and name in _arg_spec:
-        sh, dtype = _arg_spec[name]
-        assert isinstance(sh, tf.TensorShape)
-        shape = sh.merge_with(shape) if shape is None else shape
-      if default:
-        p = tf.placeholder_with_default(default, shape)
-      else:
-        p = tf.placeholder(dtype, shape, name)
-      self.auto_wrap.update({name: isinstance(shape, list)})
-      self.inputs.update({name: p})
-    self.use_wrap = any(self.auto_wrap.values())
-
     self._iscope = scope
+    self.session = chi.chi.get_session()
+
+    self.async = async
+    if async:
+      self.queue = Queue(1)
+      self.thread = Thread(target=self.run_async, daemon=True)
+      self.thread_started = False
+
     # if not self._scope:
     #   with tf.variable_scope(f.__name__) as sc:
     #     self._scope = sc
@@ -61,9 +59,53 @@ class Function(SubGraph):
     self._built = True
 
     def scoped():
+
+      sig = parse_signature(self._f)
+
+      if self.prefetch_fctn:
+        # Create prefetching queue
+        with tf.name_scope('prefetch_inputs'):
+          dtypes = [p[1] for p in sig]
+
+          def pf():
+            outs = self.prefetch_fctn()
+            outs = outs if isinstance(outs, tuple) else (outs,)
+            outs = tuple(np.asarray(out, dtype.as_numpy_dtype) for out, dtype in zip(outs, dtypes))
+            return outs
+
+          # shapes = [p[2] for p in sig]
+          queue = tf.FIFOQueue(capacity=self.prefetch_capacity, dtypes=dtypes)
+          enqueue_op = queue.enqueue(tf.py_func(pf, [], dtypes))
+          qr = tf.train.QueueRunner(queue, [enqueue_op])
+          tf.train.add_queue_runner(qr)
+
+          dequeued_tensors = queue.dequeue()
+          dequeued_tensors = dequeued_tensors if isinstance(dequeued_tensors, (list, tuple)) else (dequeued_tensors,)
+
+          sig = [(n, t, s, d) for (n, t, s, _), d in zip(sig, dequeued_tensors)]
+
+      # create placeholders
+      import collections
+      self.inputs = collections.OrderedDict()
+      self.auto_wrap = collections.OrderedDict()
+      for name, dtype, shape, default in sig:
+        if self._arg_spec and name in self._arg_spec:
+          sh, dtype = self._arg_spec[name]
+          assert isinstance(sh, tf.TensorShape)
+          shape = sh.merge_with(shape) if shape is None else shape
+        if default is not None:
+          p = tf.placeholder_with_default(default, shape, name)
+        else:
+          p = tf.placeholder(dtype, shape, name)
+        self.auto_wrap.update({name: isinstance(shape, list)})
+        self.inputs.update({name: p})
+      self.use_wrap = any(self.auto_wrap.values())
+
+      # local step
       self._step = tf.get_variable('step', initializer=0, trainable=False, dtype=tf.int32)
       self._advance = self._step.assign_add(1)
 
+      # build function
       out = self._f(**self.inputs)
 
       # collect summaries
@@ -89,7 +131,7 @@ class Function(SubGraph):
         writer = tf.summary.FileWriter(self.logdir)
         self._experiment.writers.update({self.logdir: writer})
 
-      writer.add_graph(chi.chi.get_session().graph)
+      writer.add_graph(self.session.graph)
       self.writer = writer
 
       self.logging_policy = self.logging_policy or decaying_logging_policy
@@ -102,13 +144,11 @@ class Function(SubGraph):
     self.queue_collection_key = self.name + 'queue_runners'
     qr = self.get_collection(tf.GraphKeys.QUEUE_RUNNERS)
     if qr:
-      logger.debug('Starting queue runners', qr)
+      logger.debug(f'Collecting queue runners {qr}')
     for q in qr:
       tf.add_to_collection(self.queue_collection_key, q)
 
-    self.queue_runners = tf.train.start_queue_runners(chi.chi.get_session(),
-                                                      self.coordinator,
-                                                      collection=self.queue_collection_key)
+    self.queue_runners = None
 
   # def __getattribute__(self, *args, **kwargs):
   #   ga = object.__getattribute__
@@ -124,6 +164,26 @@ class Function(SubGraph):
     if not self._built:
       self._build()
 
+    if not self.queue_runners:
+      self.queue_runners = tf.train.start_queue_runners(self.session,
+                                                        self.coordinator,
+                                                        collection=self.queue_collection_key)
+    if self.async:
+      if not self.thread_started:
+        self.thread.setName(self.name)
+        self.thread.start()
+        self.thread_started = True
+      self.queue.put((args, kwargs))
+      return
+    else:
+      return self.run(*args, **kwargs)
+
+  def run_async(self):
+    while True:
+      args, kwargs = self.queue.get()
+      self.run(*args, **kwargs)
+
+  def run(self, *args, **kwargs):
     feeds = {}
     use_wrap = False  # automatically add batch dimension true and necessary
     for p, auto_wrap, arg in zip(self.inputs.values(), self.auto_wrap.values(), args):
@@ -158,11 +218,11 @@ class Function(SubGraph):
     fetches = (fetches, self._advance)
     try:
       if log:
-        (results, step), summary = chi.chi.get_session().run((fetches, self._summary_op), feeds)
+        (results, step), summary = self.session.run((fetches, self._summary_op), feeds)
         global_step = self._experiment.global_step if self._experiment else None
         self.writer.add_summary(summary, global_step=global_step or step)
       else:
-        results, step = chi.chi.get_session().run(fetches, feeds)
+        results, step = self.session.run(fetches, feeds)
     except tf.errors.OutOfRangeError:
       results = None
       self.coordinator.request_stop()
@@ -173,7 +233,7 @@ class Function(SubGraph):
 
   def reset(self):
     local_inits = [v.initializer for v in self.local_variables()]
-    chi.chi.get_session().run(local_inits)
+    self.session.run(local_inits)
 
   # TODO:
   def save(self):
@@ -184,18 +244,19 @@ class Function(SubGraph):
     pass
 
 
-  # TODO: SubGraph as class method
-  # def __get__(self, obj, objtype):
-  #   """
-  #   In case the SubGraph is a class method we need to instantiate it for every instance.
-  #   By implementing __get__ we make it a property which allows us to instantiate a new SubGraph
-  #   the first time it is used.
-  #   """
-  #   if obj:
-  #     setattr(obj, self.f.__name__, SubGraph(self.f, parent=obj))
-  #   else:
-  #     # if we are called directly from the class (not the instance) TODO: error?
-  #     pass
+    # TODO: SubGraph as class method
+    # def __get__(self, obj, objtype):
+    #   """
+    #   In case the SubGraph is a class method we need to instantiate it for every instance.
+    #   By implementing __get__ we make it a property which allows us to instantiate a new SubGraph
+    #   the first time it is used.
+    #   """
+    #   if obj:
+    #     setattr(obj, self.f.__name__, SubGraph(self.f, parent=obj))
+    #   else:
+    #     # if we are called directly from the class (not the instance) TODO: error?
+    #     pass
+
 
 class FunctionBuilder:
   def __call__(self, f=None, *args, **kwargs) -> Function:
@@ -234,7 +295,7 @@ def parse_signature(f):
 
 
 def decaying_logging_policy(step):
-  return random.random() < max(.01, 1000 / (step+1))
+  return random.random() < max(.01, 1000 / (step + 1))
 
 
 def test_runnable():
@@ -243,5 +304,3 @@ def test_runnable():
     return a * b
 
   assert f(3, 2) == 6
-
-

@@ -1,18 +1,16 @@
 import numpy as np
 
 
-# TODO: make this list-based (i.e. variable sized)
-
 class ReplayMemory:
-  def __init__(self, size, dimO, dimA):
+  def __init__(self, size, batch_size=64):
     self.size = size
-    so = np.concatenate(np.atleast_1d(size, dimO), axis=0)
-    sa = np.concatenate(np.atleast_1d(size, dimA), axis=0)
-    self.observations = np.empty(so, dtype=object)
-    self.actions = np.empty(sa, dtype=object)
+    self.observations = np.empty(size, dtype=object)
+    self.actions = np.empty(size, dtype=object)
     self.rewards = np.empty(size, dtype=np.float32)
     self.terminals = np.empty(size, dtype=np.bool)
     self.info = np.empty(size, dtype=object)
+
+    self.batch_size = batch_size
 
     self.n = 0
     self.i = -1
@@ -24,42 +22,27 @@ class ReplayMemory:
   def enqueue(self, observation, action, reward, terminal, info=None):
     self.i = (self.i + 1) % self.size
 
-    self.observations[self.i, ...] = observation
+    self.observations[self.i] = observation
     self.terminals[self.i] = terminal  # tells whether this observation is the last
 
-    self.actions[self.i, ...] = action
+    self.actions[self.i] = action
     self.rewards[self.i] = reward
 
-    self.info[self.i, ...] = info
+    self.info[self.i] = info
 
-    self.n = min(self.size - 1, self.n + 1)
+    self.n = min(self.size, self.n + 1)
 
-  def minibatch(self, size):
-    # sample uniform random indexes
-    # indices = np.zeros(size,dtype=np.int)
-    # for k in range(size):
-    #   # find random index 
-    #   invalid = True
-    #   while invalid:
-    #     # sample index ignore wrapping over buffer
-    #     i = random.randint(0, self.n-2)
-    #     # if i-th sample is current one or is terminal: get new index
-    #     if i != self.i and not self.terminals[i]:
-    #       invalid = False
+  def sample_batch(self, size=None):
+    size = size or self.batch_size
+    assert self.n-1 > size
+    indices = np.random.randint(0, self.n - 1, size)
 
-    #   indices[k] = i
-    # print i
-    # print self.i
-
-    indices = np.random.randint(0, self.n - 2, size)
-
-    o = self.observations[indices, ...]
-    a = self.actions[indices]
+    o = np.stack(self.observations[indices], axis=0)
+    a = np.stack(self.actions[indices], axis=0)
     r = self.rewards[indices]
     t = self.terminals[indices]
-    o2 = self.observations[indices + 1, ...]
-    # t2 = self.terminals[indices+1] # to return t2 instead of t was a mistake
-    info = self.info[indices, ...]
+    o2 = np.stack(self.observations[indices + 1], axis=0)
+    info = self.info[indices]
 
     return o, a, r, t, o2, info
 
@@ -76,19 +59,27 @@ class ReplayMemory:
     return s
 
 
-def test_rm():
+def test_sample():
   s = 100
-  rm = ReplayMemory(s, 1, 1)
+  rm = ReplayMemory(s)
 
   for i in range(0, 100, 1):
-    rm.enqueue(i, i % 3 == 0, i, i, i)
+    rm.enqueue(i, i, i, i % 3 == 0, i)
 
   for i in range(1000):
-    o, a, r, t, o2, info = rm.minibatch(10)
-    assert all(o == o2 - 1), "error: o and o2"
-    assert all(o != s - 1), "error: o wrap over rm. o = " + str(o)
-    assert all(o2 != 0), "error: o2 wrap over rm"
+    o, a, r, t, o2, info = rm.sample_batch(10)
+    assert np.all(o == o2 - 1), "error: o and o2"
+    assert np.all(o != s - 1), "error: o wrap over rm. o = " + str(o)
+    assert np.all(o2 != 0), "error: o2 wrap over rm"
 
 
-if __name__ == '__main__':
-  pass
+def test_full_capacity():
+  s = 5
+  rm = ReplayMemory(s)
+
+  for i in range(0, 8, 1):
+    rm.enqueue(i, i, i, i % 3 == 0, i)
+
+  assert np.all(rm.observations.flatten() == [5., 6, 7, 3, 4])
+
+

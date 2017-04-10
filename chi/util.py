@@ -29,6 +29,16 @@ def apply_to_leaves(obj, fun):
     return fun(obj)
 
 
+def image_summary_encoded(name, data):
+  """
+  More info:
+  https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
+  """
+  v = tf.Summary.Value(node_name=name, image=tf.Summary.Image(encoded_image_string=data))
+  s = tf.Summary(value=[v])
+  return s
+
+
 def ClippingOptimizer(opt: tf.train.Optimizer, low, high):
   original = opt.apply_gradients
 
