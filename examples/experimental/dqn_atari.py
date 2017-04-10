@@ -28,8 +28,8 @@ def dqn_atari(env='Pong-v0', logdir=""):
 
   print_env(env)
 
-  @chi.model(tracker=tf.train.ExponentialMovingAverage(1-.0005),
-             optimizer=tf.train.AdamOptimizer(.0025))
+  @chi.model(tracker=tf.train.ExponentialMovingAverage(1-.0005),  # TODO: replace
+             optimizer=tf.train.RMSPropOptimizer(.00025, .95, .95, .01))
   def q_network(x):
     x /= 256
     x = layers.conv2d(x, 32, 8, 4)

@@ -36,10 +36,11 @@ class Model(SubGraph):
     self._tracker_active = False
     self.tracker_variables = []
     self._reuse = reuse or [tf.GraphKeys.GLOBAL_VARIABLES]
-    self.name = f.__name__ if f.__name__ != '<lambda>' else 'lambda'
     self._first_graph = None  # subgraph
     self._last_graph = None  # subgraph
-    with tf.variable_scope(f'{self.name}', initializer=initializer, regularizer=regularizer) as sc:
+    name = f.__name__ if f.__name__ != '<lambda>' else 'lambda'
+    with tf.variable_scope(None, name, initializer=initializer, regularizer=regularizer) as sc:
+      self.name = sc.name
       self._scope = sc
 
   def __call__(self, *args, **kwargs):

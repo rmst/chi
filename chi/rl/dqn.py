@@ -106,7 +106,7 @@ class DqnAgent:
     while not done:
       # select actions according to epsilon-greedy policy
       anneal = max(0, 1 - self.t / annealing_time)
-      if np.random.rand() < .1 * anneal:
+      if np.random.rand() < 1 * anneal + .1:
         a = np.random.randint(0, self.env.action_space.n)
       else:
         a, q = self.act(ob)
@@ -119,7 +119,7 @@ class DqnAgent:
       R += info.get('unwrapped_reward', r)
 
       train_debug = self.t == 512  # it is assumed the batch size is smaller than that
-      if self.t > 1000 or train_debug:
+      if (self.t > 1000 and self.t % 4 == 0) or train_debug:
         self.train()
 
       if self.t % 20000 == 0:
