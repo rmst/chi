@@ -179,11 +179,12 @@
           // console.log('got logs ' + data.length)
           if(data.length > 0)
             self.logs = data[0].content
+
+          setTimeout(req_logs, 7000)
         })
       }
 
       req_logs()
-      setInterval(req_logs, 5000)
     },
 
     curl: function(host, port, path){

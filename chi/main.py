@@ -13,10 +13,11 @@ class ChiModule:  # TODO: remove this class
     default = tf.get_default_session()
 
     if not (self._sess or default):
-      config = tf.ConfigProto(
-        intra_op_parallelism_threads=2,
-        inter_op_parallelism_threads=4)
-      config.gpu_options.allow_growth = True
+      # config = tf.ConfigProto(
+      #   intra_op_parallelism_threads=2,
+      #   inter_op_parallelism_threads=4)
+      # config.gpu_options.allow_growth = True
+      config = None
       self._sess = tf.Session(config=config)
       s = self._sess
     elif self._sess and default:

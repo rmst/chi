@@ -60,7 +60,7 @@ class AtariWrapper(ObservationWrapper):
 
   def _step(self, action):
     s, r, t, i = super()._step(action)
-    i.update(unwrapped_reward=r)
+    i.setdefault('unwrapped_reward', r)
     r = np.clip(r, -1, 1)
     return s, r, t, i
 
@@ -120,5 +120,6 @@ class PenalizeAction(Wrapper):
     h = self.env.action_space.high
     m = h - l
     dif = (action - np.clip(action, l - self.slack * m, h + self.slack * m))
+    i.setdefault('unwrapped_reward', r)
     r -= self.alpha * np.mean(np.square(dif / m))
     return s, r, t, i

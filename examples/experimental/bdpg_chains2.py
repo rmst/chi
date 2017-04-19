@@ -3,6 +3,7 @@ didactic "chain" environment
 """
 
 import tensorflow as tf
+from gym import Wrapper
 from tensorflow.python.layers.utils import smart_cond
 from tensorflow.python.ops.variable_scope import get_local_variable
 
@@ -19,7 +20,7 @@ from chi.rl.util import print_env
 
 
 @experiment
-def bdpg_chains(self: Experiment, logdir=None, env=3, heads=3, n=10, bootstrap=True):
+def bdpg_chains2(self: Experiment, logdir=None, env=1, heads=3, n=50, bootstrap=False, sr=50000):
   from tensorflow.contrib import layers
   import gym
   from gym import spaces
@@ -32,12 +33,43 @@ def bdpg_chains(self: Experiment, logdir=None, env=3, heads=3, n=10, bootstrap=T
 
   chi.set_loglevel('debug')
 
-  import gym_mix
-  from chi.rl.util import PenalizeAction
-  env = gym_mix.envs.ChainEnv(n)
-  env = PenalizeAction(env, .001, 1)
+  if env == 0:
+    import gym_mix
+    from chi.rl.util import PenalizeAction
+    env = gym_mix.envs.ChainEnv(n)
+    env = PenalizeAction(env, .001, 1)
+  elif env == 1:
+    # env = gym.make('Pendulum-v0')
+    env = gym.make('MountainCarContinuous-v0')
+
+  if bootstrap:
+    class Noise(Wrapper):
+      def __init__(self, env):
+        super().__init__(env)
+        self.n = 3
+        self.observation_space = gym.spaces.Box(
+          np.concatenate((self.observation_space.low, np.full([self.n], -1))),
+          np.concatenate((self.observation_space.high, np.full([self.n], 1))))
+
+      def _reset(self):
+        s = super()._reset()
+        self.noise = np.random.uniform(-1, 1, [self.n])
+        s = np.concatenate([s, self.noise])
+        return s
+
+      def _step(self, action):
+        s, r, d, i = super()._step(action)
+        s = np.concatenate([s, self.noise])
+        return s, r, d, i
+
+    env = Noise(env)
 
   print_env(env)
+
+  def pp(x):
+    # v = get_local_variable('noise', [x.shape[0], 100], initializer=tf.random_normal_initializer)
+    # y = tf.concat(x, v)
+    return x
 
   def ac(x):
     with tf.name_scope('actor_head'):
@@ -57,9 +89,9 @@ def bdpg_chains(self: Experiment, logdir=None, env=3, heads=3, n=10, bootstrap=T
       return tf.squeeze(q, 1)
 
   if bootstrap:
-    agent = BdpgAgent(env, ac, cr, heads=heads, replay_start=5000)
+    agent = DdpgAgent(env, ac, cr, replay_start=sr, noise=lambda a: a)
   else:
-    agent = DdpgAgent(env, ac, cr, replay_start=5000)
+    agent = DdpgAgent(env, ac, cr, replay_start=sr)
   threshold = getattr(getattr(env, 'spec', None), 'reward_threshold', None)
 
   for ep in range(100000):
@@ -69,6 +101,10 @@ def bdpg_chains(self: Experiment, logdir=None, env=3, heads=3, n=10, bootstrap=T
     if ep % 20 == 0:
       head = info.get('head')
       print(f'Return of episode {ep} after timestep {agent.t}: {R} (head = {head}, threshold = {threshold})')
+
+    if ep % 100 == 0 and bootstrap:
+      pass
+
   #
   # @chi.function(logging_policy=lambda _: True)
   # def plot():

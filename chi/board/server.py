@@ -20,7 +20,7 @@ from chi.util import mkdirs
 
 
 class Server(Namespace, Repo):
-  def __init__(self, host, port, rootdir, port_pool):
+  def __init__(self, host, port, rootdir, port_pool, polling_interval=20):
     self.port_pool = port_pool
     self.rootdir = rootdir
     self.host = host
@@ -71,12 +71,12 @@ class Server(Namespace, Repo):
     Repo.__init__(self, roots)
 
     # Poll filesystem
-    def scan():
-      while True:
-        self.experiments()
-        sleep(15)
-
-    Thread(target=scan, daemon=True).start()
+    # def scan():
+    #   while True:
+    #     self.experiments()
+    #     sleep(polling_interval)
+    #
+    # Thread(target=scan, daemon=True).start()
 
     # Watch filesystem with inotify
     Repo.observer.start()
@@ -98,7 +98,8 @@ class Server(Namespace, Repo):
                            bashrc=self.bashrc,
                            ))
 
-    self.upd()
+    self.experiments()  # poll file system
+    # self.upd()
 
     self.connections += 1
     logger.debug(f'connect ({self.connections})')
@@ -163,7 +164,7 @@ class Server(Namespace, Repo):
                                             '~/.chi/experiments',
                                             '~/.chi/board',
                                             '~/.chi/apps']
-          for f in rcollect(d, 10) if f.name == CONFIG_NAME)
+          for f in rcollect(d, 4) if f.name == CONFIG_NAME)
     # print(list(ps))
     exps = self.exps.copy()
     res = []

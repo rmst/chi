@@ -13,7 +13,7 @@ setup(name='chi',
       url='https://github.com/rmst/chi',
       download_url='',
       license='MIT',
-      install_requires=['tensorflow>=1.0.1', 'matplotlib>=2.0', 'flask>=0.12', 'flask_socketio', 'watchdog'],
+      install_requires=['tensorflow>=1.0.1', 'matplotlib>=2.0', 'flask>=0.12', 'flask_socketio', 'watchdog', 'gym'],
       extras_require={
           'rl': ['gym'],
       },

@@ -18,20 +18,24 @@ from tensorflow.contrib.framework import arg_scope
 
 
 class BdpgAgent:
-  def __init__(self, env: gym.Env, actor: callable, critic: callable, preprocess: Model = None, memory=None, heads=2):
-    obsp = env.observation_space
-    acsp = env.action_space
-    assert isinstance(acsp, spaces.Box), 'action space has to be continuous'
-    assert isinstance(obsp, spaces.Box), 'observation space has to be continuous'
+  def __init__(self, env: gym.Env, actor: callable, critic: callable, preprocess: Model = None, memory=None, heads=2,
+               replay_start=2000):
+    self.replay_start = replay_start
+
+    assert isinstance(env.observation_space, spaces.Box), 'action space has to be continuous'
+    assert isinstance(env.action_space, spaces.Box), 'observation space has to be continuous'
+
+    so = env.observation_space.shape
+    sa = env.action_space.shape
 
     self.env = env
     self.memory = memory or ReplayMemory(1000000)
     self.heads = heads
     self.t = 0
 
-    pp = preprocess or Model(lambda x: x,
-                             optimizer=tf.train.AdamOptimizer(.001),
-                             tracker=tf.train.ExponentialMovingAverage(1 - 0.001))
+    preprocess = preprocess or Model(lambda x: x,
+                                     optimizer=tf.train.AdamOptimizer(.001),
+                                     tracker=tf.train.ExponentialMovingAverage(1 - 0.001))
 
     def actors(x, noise=False):
       actions = [actor(x) for i in range(heads)]
@@ -49,9 +53,9 @@ class BdpgAgent:
                     optimizer=tf.train.AdamOptimizer(.001),
                     tracker=tf.train.ExponentialMovingAverage(1 - 0.001))
 
-    def act(o: [obsp.shape], noise=True):
+    def act(o: [so], noise=True):
       with arg_scope([layers.batch_norm], is_training=False):
-        s = pp(o)
+        s = preprocess(o)
         a = actors(s, noise=noise)
         q = critics(s, a)
         layers.summarize_tensors([s, *a, *q])
@@ -59,35 +63,40 @@ class BdpgAgent:
 
     self.act = Function(act)
 
-    def train_actor(o: [obsp.shape]):
-      s = pp(o)
+    def train_actor(o: [so]):
+      s = preprocess(o)
       a0 = actors(s)
       q = critics(tf.stop_gradient(s), a0)
-      loss = [- tf.reduce_mean(_, axis=0) for _ in q]
-      return actors.minimize(loss), pp.minimize(loss)
-
-    self.train_actor = Function(train_actor)
+      loss = sum((- tf.reduce_mean(_, axis=0) for _ in q))/heads
+      return loss
 
     bootstrap = False
 
-    def train_critic(o: [obsp.shape], a: [acsp.shape], r, t: tf.bool, o2: [obsp.shape], i: tf.int32):
-      s = pp(o)
+    def train_critic(o: [so], a: [sa], r, t: tf.bool, o2: [so], i: tf.int32):
+      s = preprocess(o)
       q2 = critics(s, [a for _ in range(heads)])
-      s2 = pp.tracked(o2)
+      s2 = preprocess.tracked(o2)
       qt = critics.tracked(s2, actors.tracked(s2))
-      qtt = [tf.where(t, r, r + 0.99 * _) for _ in qt]
+      qtt = [tf.where(t, r, r + 0.99 * tf.stop_gradient(_)) for _ in qt]
 
-      def loss(_i, _q2, _qtt):
-        sel = tf.equal(i, _i) if bootstrap else tf.fill(tf.shape(i), True)
-        e = tf.where(sel, tf.square(_q2 - _qtt), tf.zeros_like(_q2))
-        mse = tf.reduce_sum(e, axis=0) / tf.reduce_sum(tf.cast(sel, tf.float32), axis=0)
-        return mse
+      # def loss(_i, _q2, _qtt):
+      #   sel = tf.equal(i, _i) if bootstrap else tf.fill(tf.shape(i), True)
+      #   e = tf.where(sel, tf.square(_q2 - _qtt), tf.zeros_like(_q2))
+      #   mse = tf.reduce_sum(e, axis=0) / tf.reduce_sum(tf.cast(sel, tf.float32), axis=0)
+      #   return mse
 
-      mse = [loss(_i, _q2, _qtt) for _i, (_q2, _qtt) in enumerate(zip(q2, qtt))]
+      mse = sum([tf.reduce_mean(tf.square(_q2 - _qtt)) for _q2, _qtt in zip(q2, qtt)])/heads
+      return mse
 
-      return critics.minimize(mse), pp.minimize(mse)
+    def train(o: [so], a: [sa], r, t: tf.bool, o2: [so], i: tf.int32):
+      al = train_actor(o)
+      mse = train_critic(o, a, r, t, o2, i)
+      return actors.minimize(al), critics.minimize(mse), preprocess.minimize([mse, al])
 
-    self.train_critic = Function(train_critic)
+    self.train = Function(train,
+                          prefetch_fctn=lambda: self.memory.sample_batch(),
+                          prefetch_capacity=3,
+                          async=True)
 
     def log_return(r: []):
       layers.summarize_tensor(r, 'Return')
@@ -104,25 +113,17 @@ class BdpgAgent:
       a = self.act(ob)
       a = a[idx]
       a = a if np.random.rand() > .1 else self.env.action_space.sample()
-      ob2, r, done, _ = self.env.step(a)
+      ob2, r, done, info = self.env.step(a)
       self.memory.enqueue(ob, a, r, done, idx)
 
       ob = ob2
-      R += r
+      R += info.get('unwrapped_reward', r)
 
       debug_training = self.t == 100
-      if self.t > 2000 or debug_training:
-        mbs = 64
-
-        for i in range(1):
-          mb = self.memory.sample_batch(mbs)
-          self.train_critic(*mb)
-
-        mb = self.memory.sample_batch(mbs)
-        self.train_actor(mb[0])
+      if self.t > self.replay_start or debug_training:
+        self.train()
 
       self.t += 1
 
     self.log_return(R)
     return R, {'head': idx}
-

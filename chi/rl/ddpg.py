@@ -36,9 +36,9 @@ def ornstein_uhlenbeck_noise(a, t_decay=100000):
 class DdpgAgent:
   def __init__(self, env: gym.Env, actor: Model, critic: Model, preprocess: Model = None, memory=None,
                noise: callable = ornstein_uhlenbeck_noise,
-               warmup_time=5000, training_repeats=10):
+               replay_start=5000, training_repeats=1):
 
-    self.warmup_time = warmup_time
+    self.warmup_time = replay_start
     self.training_repeats = training_repeats
     assert isinstance(env.action_space, spaces.Box), "The environment's action space has to be continuous"
 
@@ -47,6 +47,16 @@ class DdpgAgent:
 
     self.memory = memory or ReplayMemory(1000000)
     self.env = env
+
+    if not isinstance(actor, Model):
+      actor = Model(actor,
+                    optimizer=tf.train.AdamOptimizer(.0001),
+                    tracker=tf.train.ExponentialMovingAverage(1 - .001))
+
+    if not isinstance(critic, Model):
+      critic = Model(critic,
+                     optimizer=tf.train.AdamOptimizer(.001),
+                     tracker=tf.train.ExponentialMovingAverage(1 - .001))
 
     preprocess = preprocess or Model(lambda x: x,
                                      optimizer=tf.train.AdamOptimizer(.001),
@@ -105,11 +115,11 @@ class DdpgAgent:
     while not done:
       # a = act(ob, False) if np.random.rand() > .1 else acsp.sample()
       a = self.act(ob)
-      ob2, r, done, _ = self.env.step(a)
+      ob2, r, done, info = self.env.step(a)
       self.memory.enqueue(ob, a, r, done)
 
       ob = ob2
-      R += r
+      R += info.get('unwrapped_reward', r)
 
       debug_training = self.t == 512  # fail fast ;)
       if self.t > self.warmup_time or debug_training:

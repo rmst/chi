@@ -1,14 +1,17 @@
-from time import sleep
+from logging import Logger
+from threading import Thread
+from time import sleep, time
 
 import chi
 import numpy as np
 import gym
 import tensorflow as tf
+from gym.wrappers import Monitor
 from tensorflow.contrib import layers
 from chi import Function
 
 
-class DqnAgent:
+class AsyncDQNAgent:
   """
   An implementation of
     Human Level Control through Deep Reinforcement Learning
@@ -17,18 +20,21 @@ class DqnAgent:
     Deep Reinforcement Learning with Double Q-learning
     https://arxiv.org/abs/1509.06461
   """
-  def __init__(self, env: gym.Env, q_network: chi.Model, memory=None, double_dqn=True, replay_start=50000):
+  def __init__(self, env: list, q_network: chi.Model, memory=None, double_dqn=True, replay_start=50000, logdir=""):
+    self.logdir = logdir
     self.replay_start = replay_start
-    so = env.observation_space.shape
 
-    self.env = env
+    self.env = env[0]
+    self.envs = env
+
     self.memory = memory or chi.rl.ReplayMemory(1000000)
+
+    so = self.env.observation_space.shape
 
     def act(x: [so]):
       qs = q_network(x)
       a = tf.argmax(qs, axis=1)
       # qm = tf.reduce_max(qs, axis=1)
-      layers.summarize_tensor(a)
       return a, qs
 
     self.act = Function(act)
@@ -45,12 +51,12 @@ class DqnAgent:
       else:
         a2 = tf.argmax(q2, axis=1)
 
-      mask2 = tf.one_hot(a2, env.action_space.n, 1.0, 0.0, axis=1)
+      mask2 = tf.one_hot(a2, self.env.action_space.n, 1.0, 0.0, axis=1)
       q_target = tf.where(t, r, r + 0.99 * tf.reduce_sum(q2 * mask2, axis=1))
       q_target = tf.stop_gradient(q_target)
 
       # compute loss
-      mask = tf.one_hot(a, env.action_space.n, 1.0, 0.0, axis=1)
+      mask = tf.one_hot(a, self.env.action_space.n, 1.0, 0.0, axis=1)
       qs = tf.reduce_sum(q * mask, axis=1, name='q_max')
       td = tf.subtract(q_target, qs, name='td')
       # td = tf.clip_by_value(td, -10, 10)
@@ -71,8 +77,7 @@ class DqnAgent:
 
     self.train = Function(train,
                           prefetch_fctn=lambda: self.memory.sample_batch()[:-1],
-                          prefetch_capacity=3,
-                          async=True)
+                          prefetch_capacity=3)
 
     def log_weigths():
       v = q_network.trainable_variables()
@@ -95,48 +100,90 @@ class DqnAgent:
 
     self.log_returns = Function(log_returns, async=True)
 
-    self.t = 0
+  def run_training(self, T=10000000):
+    def player(env, test, name):
 
-  def play_episode(self, test=False):
-    ob = self.env.reset()
-    done = False
-    R = 0
-    ret = 0
-    annealing_time = 1000000
-    value_estimates = []
+      # logging
+      logger = Logger(name)
+      import logging
+      ch = logging.FileHandler(self.logdir + '/logs/' + name)
+      logger.addHandler(ch)
+      logger.setLevel(logging.DEBUG)
+      logger.info(name + ' starting')
 
-    while not done:
-      # select actions according to epsilon-greedy policy
-      anneal = max(0, 1 - self.t / annealing_time)
-      if not test and (self.t < self.replay_start or np.random.rand() < 1 * anneal + .1):
-        a = np.random.randint(0, self.env.action_space.n)
-      else:
-        a, q = self.act(ob)
-        value_estimates.append(np.max(q))
+      t = 0
+      monitor = env if isinstance(env, Monitor) else None
+      ti = time()
+      for ep in range(1000000000):
+        ob = env.reset()
+        done = False
+        R = 0
+        ret = 0
+        annealing_time = 1000000
+        value_estimates = []
+        while not done:
+          # select actions according to epsilon-greedy policy
+          anneal = max(0, 1 - self.memory.t / annealing_time)
+          if not test and (self.memory.t < self.replay_start or np.random.rand() < 1 * anneal + .1):
+            a = np.random.randint(0, self.env.action_space.n)
+          else:
+            a, q = self.act(ob)
+            value_estimates.append(np.max(q))
 
-      ob2, r, done, info = self.env.step(a)
+          ob2, r, done, info = env.step(a)
 
-      if not test:
-        self.memory.enqueue(ob, a, r, done, info)
+          if not test:
+            self.memory.enqueue(ob, a, r, done, info)
 
-      ob = ob2
+          ob = ob2
 
-      ret += r
-      R += info.get('unwrapped_reward', r)
+          ret += r
+          R += info.get('unwrapped_reward', r)
+          t += 1
 
-      train_debug = self.t == 512  # it is assumed the batch size is smaller than that
-      if (self.t > self.replay_start and self.t % 4 == 0) or train_debug:
+        if test:
+          self.log_returns(R, ret, value_estimates)
+
+
+        logi = 5
+        if ep % logi == 0 and monitor:
+          assert isinstance(monitor, Monitor)
+          at = np.mean(monitor.get_episode_rewards()[-logi:])
+          ds = sum(monitor.get_episode_lengths()[-logi:])
+          dt = time() - ti
+
+          if test:
+            sleep(logi*60*0)
+
+          ti = time()
+          logger.info(f'av. return {at}, av. fps {ds/dt}')
+
+        if self.memory.t > T:
+          break
+
+    for i, e in enumerate(self.envs):
+      Thread(target=player, args=(e, i == 0, 'agent_' + str(i)), daemon=True, name=f'agent_{i}').start()
+
+    debugged = False
+    t = 0
+    wt = 0
+    while self.memory.t < T:
+      train_debug = not debugged and self.memory.t > 512  # it is assumed the batch size is smaller than that
+      debugged = debugged or train_debug
+      if (self.memory.t > self.replay_start and t < self.memory.t / 4) or train_debug:
+
+        if t % 5000 == 0:
+          print(f"{t} steps of training after {self.memory.t} steps of experience (idle for {wt*.1} s)")
+          wt = 0
         self.train()
 
-      if self.t % 50000 == 0:
-        self.log_weights()
+        if t % 50000 == 0:
+          self.log_weights()
+        t += 1
+      else:
+        sleep(.1)
+        wt += 1
 
-      self.t += 1
-
-    if test:
-      self.log_returns(R, ret, value_estimates)
-
-    return R, {}
 
 
 # Tests

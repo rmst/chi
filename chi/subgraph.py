@@ -73,7 +73,7 @@ class SubGraph:
     return scope_ops
 
   def get_collection(self, name):
-    return tf.get_collection(name, self._scope.name)
+    return tf.get_collection(name, self._scope.name + '/')
 
   def get_ops_by_type(self, type_name):
     return [op for op in self.get_ops() if op.type == type_name]

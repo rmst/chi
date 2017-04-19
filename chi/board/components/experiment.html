@@ -18,11 +18,12 @@
   <link rel="import" href="/bower_components/paper-tabs/paper-tabs.html">
 
   <!-- <link rel="import" href="/bower_components/paper-tabs//paper-tab.html"> -->
-  <link rel="import" href="/bower_components/iron-pages/iron-pages.html">
+  <link rel="import" href="/bower_components/iron-lazy-pages/iron-lazy-pages.html">
 
 
   <style>
   html, body{
+    box-sizing: border-box;
     height: 100%;
     width: 100%;
     margin: 0;
@@ -111,11 +112,12 @@
       margin-left: 30px;
     };
     
-    iron-pages{
+    iron-lazy-pages{
       height: 100%;
       width: 100%;
       margin: 0;
       padding: 0;
+      flex: 0;
     }
 
     .page{
@@ -137,6 +139,14 @@
       padding: 15px;
     }
 
+    paper-header-panel{
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      flex: 0;
+    }
+
 
   </style>
 
@@ -156,36 +166,45 @@
 
     </paper-toolbar>
 
-    <iron-pages class="" selected="{{selected}}">
-		  <div class="log-page">
-        <template is="dom-repeat" items="[[logs]]">
-          <log-view data=[[item]]></log-view>
-	  		</template>
-	  	</div>
+    <iron-lazy-pages class="" attr-for-selected="data-route" selected="{{selected}}">
 
-    	<div class="page">
-    		<pre id="details" class="">{{detailsc}}</pre>
-    	</div>
+      <template is="iron-lazy-page" data-route=0>
+        <div class="log-page">
+          <template is="dom-repeat" items="[[logs]]">
+            <log-view data=[[item]]></log-view>
+          </template>
+        </div>
+      </template>
 
-		  <div class="page">
-        <template is="dom-if" if="{{no_event_files}}">
-          <div style="height: 100%; width:100%; padding-top: 109px; text-align: center;">
-            No event files
-          </div>
-        </template>
-        <template is="dom-if" if="{{ef}}">
-				  <!-- <div style="height:40px"></div> -->
-		  	 <iframe id="tb" src="{{framesrc}}"></iframe>
-        </template>
-		  </div>
+      <template is="iron-lazy-page" data-route=1>
+        <div class="page">
+          <pre id="details" class="">{{detailsc}}</pre>
+        </div>
+      </template>
 
-      <div class="page">
-        <template is="dom-if" if="{{jupyter}}">
-          <iframe id="jupyter" src="http://localhost:{{details.jupyter_port}}/tree{{details.alternate_path}}"></iframe>
-        </template>
-      </div>
+      <template is="iron-lazy-page" data-route=2>
+        <div class="page">
+          <template is="dom-if" if="{{no_event_files}}">
+            <div style="height: 100%; width:100%; padding-top: 109px; text-align: center;">
+              No event files
+            </div>
+          </template>
+          <template is="dom-if" if="{{ef}}">
+            <!-- <div style="height:40px"></div> -->
+           <iframe id="tb" src="{{framesrc}}"></iframe>
+          </template>
+        </div>
+      </template>
 
-		</iron-pages>
+      <template is="iron-lazy-page" data-route=3>
+        <div class="page">
+          <template is="dom-if" if="{{jupyter}}">
+            <iframe id="jupyter" src="http://localhost:{{details.jupyter_port}}/tree{{details.alternate_path}}"></iframe>
+          </template>
+        </div>
+      </template>
+
+		</iron-lazy-pages>
 
 	</paper-header-panel>
   </template>
@@ -255,11 +274,11 @@
 
           self.details = data
           self.jupyter = data.jupyter_port != -1
+          setTimeout(req_details, 7000)
         })
  			}
 
       req_details()
-      setInterval(req_details, 5000)
 
 
       // logs
@@ -273,11 +292,11 @@
           console.log('got logs ' + data.length)
 
           self.logs = data
+          setTimeout(req_logs, 7000)
         })
  			}
 
       req_logs()
-      setInterval(req_logs, 5000)
 
 
       // tensorboard
@@ -296,12 +315,12 @@
               // frame._empty = false
             }
           }
+          setTimeout(req_tb, 7000)
 
         });
       }
 
       req_tb()
-      setInterval(req_tb, 5000);
 
 
     },
@@ -315,7 +334,7 @@
 	:host{
     flex: 1;
     min-width: 500px;
-    /*max-width: 800px;*/
+    max-width: 1200px;
     min-height: 300px;
     /*max-height: 800px;*/
     overflow: hidden;

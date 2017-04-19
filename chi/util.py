@@ -116,13 +116,13 @@ def cmd_args(**kwargs):
   a = []
   for k, v in kwargs.items():
     if v is False:
-      a.append('--no-'+k)
+      a.append('--no-' + k)
     elif v is True:
-      a.append('--'+k)
+      a.append('--' + k)
     elif v is not None:
       s = str(v)
       if s:
-        a += ['--'+k, quote(s)]
+        a += ['--' + k, quote(s)]
   return a
 
 
@@ -131,11 +131,11 @@ def rln(adr, src, dst):
 
 
 def store_path(adr, path):
-  return expanduser(adr+':~/.chi/cache/')+os.path.relpath(path, os.path.expanduser('~'))
+  return expanduser(adr + ':~/.chi/cache/') + os.path.relpath(path, os.path.expanduser('~'))
 
 
 def expanduser(path: str):
-  return path.replace('~', '/home/'+path.split('@')[0]) if is_remote(path) else os.path.expanduser(path)
+  return path.replace('~', '/home/' + path.split('@')[0]) if is_remote(path) else os.path.expanduser(path)
 
 
 def is_remote(path):
@@ -219,6 +219,39 @@ def run_daemon(script, kwargs, executable=sys.executable):
                           stdout=open('/dev/null', 'w'),
                           stderr=open('/dev/null', 'w'),
                           preexec_fn=os.setpgrp)
+
+
+def run_parallel(cmd, filename):
+  f = open(filename, 'w')
+  try:
+    p = subprocess.Popen(cmd,
+                         stdout=f,
+                         stderr=f,
+                         )
+  except FileNotFoundError:
+    return False
+
+  import atexit
+
+  def kill():
+    f.close()
+    if not p.poll():
+      logger.debug('Killing process started with ' + str(cmd))
+      p.kill()
+
+  atexit.register(kill)
+  return True
+
+
+def log_top(filename):
+  import psutil
+  pids = [str(p.pid) for p in psutil.Process().children(recursive=True)]
+  import os
+  run_parallel(['top', '-b', '-p', ','.join([str(os.getpid())] + pids)], filename)
+
+
+def log_nvidia_smi(filename):
+  run_parallel(['nvidia-smi', 'pmon'], filename)
 
 
 class Config:
