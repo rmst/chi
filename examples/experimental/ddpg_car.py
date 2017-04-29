@@ -9,7 +9,8 @@ from chi import experiment, model, Experiment
 
 # chi.chi.tf_debug = True
 from chi.rl.ddpg import DdpgAgent
-from chi.rl.util import print_env, PenalizeAction
+from chi.rl.util import print_env
+from chi.rl.wrappers import PenalizeAction
 
 
 @experiment

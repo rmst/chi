@@ -33,7 +33,7 @@ def bdpg_chains(self: Experiment, logdir=None, env=3, heads=3, n=10, bootstrap=T
   chi.set_loglevel('debug')
 
   import gym_mix
-  from chi.rl.util import PenalizeAction
+  from chi.rl.wrappers import PenalizeAction
   env = gym_mix.envs.ChainEnv(n)
   env = PenalizeAction(env, .001, 1)
 

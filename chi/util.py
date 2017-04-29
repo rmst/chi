@@ -29,6 +29,78 @@ def apply_to_leaves(obj, fun):
     return fun(obj)
 
 
+redirect = {}
+
+
+@contextmanager
+def output_redirect(stdout, stderr):
+  """
+  thread safe redirect of stdout and stderr
+  :param stdout:
+  :param stderr:
+  :return:
+  """
+  import sys
+  import threading
+  if not redirect:
+    originals = (sys.stdout.write, sys.stderr.write)
+
+    class Logger:
+      def __init__(self, fun):
+        self.buffer = ""
+        self.fun = fun
+
+      def logs(self):
+        logs = redirect.get(threading.current_thread(), originals)[self.fun]
+        # sys.__stdout__.write('hello ' + str(threading.current_thread()))
+        if not isinstance(logs, (list, tuple)):
+          logs = [logs]
+        return logs
+
+      def write(self, s):
+        self.buffer += s
+        lines = self.buffer.splitlines(keepends=True)
+        last = lines[-1]
+        if lines[-1][-1] != '\n':
+          self.buffer = lines[-1]
+          lines = lines[:-1]
+        else:
+          self.buffer = ""
+
+        for line in lines:
+          for log in self.logs():
+            getattr(log, 'write', lambda x: log(x))(line)
+
+      def flush_buffer(self):
+        if self.buffer:
+          for log in self.logs():
+            getattr(log, 'write', lambda x: log(x))(self.buffer)
+
+      def close(self):
+        for log in self.logs():
+          self.flush_buffer()
+          getattr(log, 'close', lambda: None)()
+
+    lsout = Logger(0)
+    sys.stdout.write = lsout.write
+    lserr = Logger(1)
+    sys.stderr.write = lserr.write
+
+  # print('red ', threading.current_thread())
+  thread = threading.current_thread()
+  redirect.update({thread: (stdout, stderr)})
+  try:
+    yield
+  except Exception as e:
+    r = redirect.pop(thread, None)
+    getattr(r, 'flush_buffer', lambda: None)()
+    raise Exception(e) from e
+  else:
+    r = redirect.pop(thread, None)
+    getattr(r, 'flush_buffer', lambda: None)()
+
+
+
 def image_summary_encoded(name, data):
   """
   More info:

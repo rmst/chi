@@ -268,7 +268,9 @@
 
     _isApp: is_app,
 
-    _isExp: x=>{return ! is_app(x)},
+    _isExp: x=>{
+      return !is_app(x)
+    },
 
     killself: ()=>{this.$.get("kill/~/.chi/dashboard")},
 

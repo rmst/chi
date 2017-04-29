@@ -1,14 +1,15 @@
+import threading
+from contextlib import contextmanager
+
 import numpy as np
-from PIL import Image
-from gym import Wrapper, Env, ObservationWrapper, ActionWrapper
-from gym.spaces import Box, Discrete
-from scipy.misc import imresize
+from chi.rl.wrappers import Wrapper
+from gym import Env
+from gym.spaces import Box
 
 
 def print_env(env: Env):
   spec = getattr(env, 'spec', False)
   if spec:
-    from gym.envs.registration import EnvSpec
     print(f'Env spec: {vars(spec)}')
 
   acsp = env.action_space
@@ -25,101 +26,126 @@ def print_env(env: Env):
   print("")
 
 
-class DiscretizeActions(Wrapper):
-  def __init__(self, env, actions):
-    super().__init__(env)
-    acsp = self.env.action_space
-    assert isinstance(acsp, Box), "action space not continuous"
-    self.actions = np.array(actions)
-    assert self.actions.shape[1:] == acsp.shape, "shape of actions does not match action space"
-    self.action_space = Discrete(self.actions.shape[0])
-
-  def _step(self, action):
-    a = self.actions[action]
-    return super()._step(a)
+from matplotlib import pyplot as plt
+plt.switch_backend('agg')
 
 
-class AtariWrapper(ObservationWrapper):
+class Plotter:
+  def __init__(self, axes, timesteps=20, limits=None, title="", legend=()):
+    self.legend = legend
+    self.x = []
+    self.timesteps = timesteps
+    self.limits = limits
+    self.lines = []
+    self.ax: plt.Axes = axes
+    self.ax.set_title(title)
+    self.ax.set_xlim(-self.timesteps, 0)
+    self.mean = 0
+    self.var = 1
+    self.y = []
+    self.reset()
+
+  def reset(self):
+    self.y = []
+
+  def append(self, data):
+    self.y.append(data)
+    if len(self.y) > self.timesteps:
+      self.y = self.y[1:]
+    self.x = range(-len(self.y), 0)
+
+    alpha = .0001
+    beta = .001
+    y = np.asarray(self.y)
+    mean = np.mean(y)
+    self.mean = (1-alpha) * self.mean + alpha * mean
+    self.var = (1-beta) * self.var + beta * np.mean(np.square(y - self.mean))
+
+    if self.y:
+      y = np.asarray(self.y)
+      if not self.lines:
+        self.lines = self.ax.plot(self.x, y)
+        if self.legend:
+          self.ax.legend(self.legend, loc='upper left')
+      elif np.ndim(y) == 1:
+        self.lines[0].set_data(self.x, y)
+      else:
+        for i, line in enumerate(self.lines):
+          line.set_data(self.x, y[:, i])
+
+      limits = self.limits or (self.mean - 4*np.sqrt(self.var), self.mean + 4*np.sqrt(self.var))
+      self.ax.set_ylim(*limits)
+      # self.ax.relim()
+      # self.ax.autoscale_view()
+
+
+def draw(figure):
+  figure.canvas.draw()
+  data = np.fromstring(figure.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+  frame = data.reshape(figure.canvas.get_width_height()[::-1] + (3,))
+
+  return frame
+
+
+def concat_frames(*frames):
+  h = max(f.shape[0] for f in frames)
+  w = sum(f.shape[1] for f in frames)
+  canvas = np.zeros((h, w, 3), dtype=np.uint8)
+  wi = 0
+  for f in frames:
+    canvas[0: f.shape[0], wi: wi+f.shape[1], :] = f
+    wi += f.shape[1]
+
+  return canvas
+
+
+class ReadWriteLock:
+  """ Lock excluding writes and reads while allowing multiple reads at the same time
+  Parts from: https://majid.info/blog/a-reader-writer-lock-for-python/
   """
-  Pre-processing according to the following paper:
-  http://www.nature.com/nature/journal/v518/n7540/full/nature14236.html
-  """
-  def __init__(self, env):
-    super().__init__(env)
-    lo = self.env.observation_space.low
-    hi = self.env.observation_space.high
-    w, h, c = self.env.observation_space.shape
-    self.w = w
-    self.h = h
-    self.observation_space = Box(0, 255, [84, 84])
+  def __init__(self):
+    self.count = 0
+    self.writers_waiting = 0
+    self.count_lock = threading.Lock()
+    self.readers_ok = threading.Condition(self.count_lock)
+    self.writers_ok = threading.Condition(self.count_lock)
 
-  def _reset(self):
-    self.previous_frame = np.zeros([self.w, self.h, 3], dtype=np.uint8)
-    o = super()._reset()
-    return o
+  @contextmanager
+  def read(self):
+    self.count_lock.acquire()
+    while self.count < 0 or self.writers_waiting:
+      self.readers_ok.wait()
+    self.count += 1
+    self.count_lock.release()
+    yield
+    self.release()
 
-  def _step(self, action):
-    s, r, t, i = super()._step(action)
-    i.setdefault('unwrapped_reward', r)
-    r = np.clip(r, -1, 1)
-    return s, r, t, i
+  @contextmanager
+  def write(self):
+    self.count_lock.acquire()
+    while self.count != 0:
+      self.writers_waiting += 1
+      self.writers_ok.wait()
+      self.writers_waiting -= 1
+    self.count = -1
+    self.count_lock.release()
+    yield
+    self.release()
 
-  def _observation(self, observation):
-    """ Paper: First, to encode a single frame we take the maximum value for each pixel colour
-        value over the frame being encoded and the previous frame. This was necessary to
-        remove flickering that is present in games where some objects appear only in even
-        frames while other objects appear only in odd frames, an artefact caused by the
-        limited number of sprites Atari 2600 can display at once. """
-
-    obs = np.maximum(observation, self.previous_frame)
-    self.previous_frame = observation
-
-    """ Paper: Second, we then extract
-    the Y channel, also known as luminance, from the RGB frame and rescale it to
-    84 x 84 """
-    img = Image.fromarray(obs)
-    obs = img.resize([84, 84]).convert('L')
-
-    obs = np.asarray(obs, dtype=np.uint8)
-
-    return obs
-
-
-class StackFrames(ObservationWrapper):
-
-  def __init__(self, env, n, dtype=np.uint8):
-    super().__init__(env)
-    lo = self.env.observation_space.low
-    hi = self.env.observation_space.high
-    self.so = self.env.observation_space.shape
-    self.observation_space = Box(0, 255, [*self.so, n])
-    self.n = n
-    self.dtype = dtype
-
-  def _reset(self):
-    self.obs = tuple(np.zeros(self.so, dtype=self.dtype) for _ in range(self.n))
-    s = super()._reset()
-    return s
-
-  def _observation(self, observation):
-    self.obs = (*self.obs[1:], observation)
-    return np.stack(self.obs, axis=-1)
-
-
-class PenalizeAction(Wrapper):
-  def __init__(self, env, alpha=.01, slack=.5):
-    super().__init__(env)
-    self.alpha = alpha
-    self.slack = slack
-
-  def _step(self, action):
-    s, r, t, i = super()._step(action)
-    assert isinstance(self.env, Env)
-    assert isinstance(self.env.action_space, Box)
-    l = self.env.action_space.low
-    h = self.env.action_space.high
-    m = h - l
-    dif = (action - np.clip(action, l - self.slack * m, h + self.slack * m))
-    i.setdefault('unwrapped_reward', r)
-    r -= self.alpha * np.mean(np.square(dif / m))
-    return s, r, t, i
+  def release(self):
+    self.count_lock.acquire()
+    if self.count < 0:
+      self.count = 0
+    else:
+      self.count -= 1
+    wake_writers = self.writers_waiting and self.count == 0
+    wake_readers = self.writers_waiting == 0
+    self.count_lock.release()
+    if wake_writers:
+      self.writers_ok.acquire()
+      self.writers_ok.notify()
+      self.writers_ok.release()
+    elif wake_readers:
+      self.readers_ok.acquire()
+      self.readers_ok.notifyAll()
+      self.readers_ok.release()

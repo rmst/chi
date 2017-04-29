@@ -35,7 +35,7 @@ def bdpg_chains2(self: Experiment, logdir=None, env=1, heads=3, n=50, bootstrap=
 
   if env == 0:
     import gym_mix
-    from chi.rl.util import PenalizeAction
+    from chi.rl.wrappers import PenalizeAction
     env = gym_mix.envs.ChainEnv(n)
     env = PenalizeAction(env, .001, 1)
   elif env == 1:

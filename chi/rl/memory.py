@@ -1,11 +1,13 @@
-from threading import Lock
-
+from threading import Lock, Semaphore
 import numpy as np
+from chi.rl.util import ReadWriteLock
 
 
 class ReplayMemory:
   def __init__(self, size, batch_size=64):
-    self.lock = Lock()
+    self.lock = ReadWriteLock()
+    self.count = 0
+
     self.size = size
     self.init = False
     self.rewards = np.empty(size, dtype=np.float32)
@@ -23,43 +25,40 @@ class ReplayMemory:
     self.t = -1
 
   def enqueue(self, observation, action, reward, terminal, info=None):
-    self.lock.acquire()
-    observation = np.asarray(observation)
-    aa = np.asarray(action)
-    if not self.init:
-      self.observations = np.empty((self.size,)+observation.shape, dtype=observation.dtype)
-      self.actions = np.empty((self.size,) + aa.shape, dtype=aa.dtype)
-      self.init = True
+    with self.lock.write():
+      observation = np.asarray(observation)
+      aa = np.asarray(action)
+      if not self.init:
+        self.observations = np.empty((self.size,)+observation.shape, dtype=observation.dtype)
+        self.actions = np.empty((self.size,) + aa.shape, dtype=aa.dtype)
+        self.init = True
 
-    self.i = (self.i + 1) % self.size
-    self.t = self.t + 1
+      self.i = (self.i + 1) % self.size
+      self.t = self.t + 1
 
-    self.observations[self.i, ...] = observation
-    self.terminals[self.i] = terminal  # tells whether this observation is the last
+      self.observations[self.i, ...] = observation
+      self.terminals[self.i] = terminal  # tells whether this observation is the last
 
-    self.actions[self.i, ...] = action
-    self.rewards[self.i] = reward
+      self.actions[self.i, ...] = action
+      self.rewards[self.i] = reward
 
-    self.info[self.i] = info
+      self.info[self.i] = info
 
-    self.n = min(self.size, self.n + 1)
-    self.lock.release()
+      self.n = min(self.size, self.n + 1)
 
   def sample_batch(self, size=None):
-    self.lock.acquire()
-    size = size or self.batch_size
-    assert self.n-1 > size
-    indices = np.random.randint(0, self.n - 1, size)
+    with self.lock.read():
+      size = size or self.batch_size
+      assert self.n-1 > size
+      indices = np.random.randint(0, self.n - 1, size)
 
-    o = self.observations[indices, ...]
-    a = self.actions[indices]
-    r = self.rewards[indices]
-    t = self.terminals[indices]
-    o2 = self.observations[indices + 1, ...]
-    info = self.info[indices, ...]
-    self.lock.release()
-
-    return o, a, r, t, o2, info
+      o = self.observations[indices, ...]
+      a = self.actions[indices]
+      r = self.rewards[indices]
+      t = self.terminals[indices]
+      o2 = self.observations[indices + 1, ...]
+      info = self.info[indices, ...]
+      return o, a, r, t, o2, info
 
   def __repr__(self):
     indices = range(0, self.n)

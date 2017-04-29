@@ -1,17 +1,19 @@
-from logging import Logger
-from threading import Thread
 from time import sleep, time
 
 import chi
-import numpy as np
+import chi.rl.wrappers
 import gym
+import numpy as np
 import tensorflow as tf
+from chi import Function
+from chi.rl.core import Agent
+from chi.rl.wrappers import get_wrapper
+from gym import wrappers
 from gym.wrappers import Monitor
 from tensorflow.contrib import layers
-from chi import Function
 
 
-class AsyncDQNAgent:
+class DQN:
   """
   An implementation of
     Human Level Control through Deep Reinforcement Learning
@@ -20,18 +22,16 @@ class AsyncDQNAgent:
     Deep Reinforcement Learning with Double Q-learning
     https://arxiv.org/abs/1509.06461
   """
-  def __init__(self, env: list, q_network: chi.Model, memory=None, double_dqn=True, replay_start=50000, logdir=""):
+
+  def __init__(self, n_actions, observation_shape, q_network: chi.Model, memory=None, double_dqn=True,
+               replay_start=50000, logdir=""):
     self.logdir = logdir
     self.replay_start = replay_start
-
-    self.env = env[0]
-    self.envs = env
-
+    self.n_actions = n_actions
+    self.observation_shape = observation_shape
     self.memory = memory or chi.rl.ReplayMemory(1000000)
 
-    so = self.env.observation_space.shape
-
-    def act(x: [so]):
+    def act(x: [observation_shape]):
       qs = q_network(x)
       a = tf.argmax(qs, axis=1)
       # qm = tf.reduce_max(qs, axis=1)
@@ -39,7 +39,7 @@ class AsyncDQNAgent:
 
     self.act = Function(act)
 
-    def train(o: [so], a: (tf.int32, [[]]), r, t: tf.bool, o2: [so]):
+    def train_step(o: [observation_shape], a: (tf.int32, [[]]), r, t: tf.bool, o2: [observation_shape]):
       q = q_network(o)
       # ac = tf.argmax(q, axis=1)
 
@@ -51,12 +51,12 @@ class AsyncDQNAgent:
       else:
         a2 = tf.argmax(q2, axis=1)
 
-      mask2 = tf.one_hot(a2, self.env.action_space.n, 1.0, 0.0, axis=1)
+      mask2 = tf.one_hot(a2, n_actions, 1.0, 0.0, axis=1)
       q_target = tf.where(t, r, r + 0.99 * tf.reduce_sum(q2 * mask2, axis=1))
       q_target = tf.stop_gradient(q_target)
 
       # compute loss
-      mask = tf.one_hot(a, self.env.action_space.n, 1.0, 0.0, axis=1)
+      mask = tf.one_hot(a, n_actions, 1.0, 0.0, axis=1)
       qs = tf.reduce_sum(q * mask, axis=1, name='q_max')
       td = tf.subtract(q_target, qs, name='td')
       # td = tf.clip_by_value(td, -10, 10)
@@ -75,9 +75,9 @@ class AsyncDQNAgent:
       # layers.summarize_tensors(chi.gradients())
       return loss
 
-    self.train = Function(train,
-                          prefetch_fctn=lambda: self.memory.sample_batch()[:-1],
-                          prefetch_capacity=3)
+    self.train_step = Function(train_step,
+                               prefetch_fctn=lambda: self.memory.sample_batch()[:-1],
+                               prefetch_capacity=10)
 
     def log_weigths():
       v = q_network.trainable_variables()
@@ -91,91 +91,25 @@ class AsyncDQNAgent:
         a = q_network.tracker.average(g)
         difs.append(tf.subtract(g, a, name=f'ema/dif{g.name[:-2]}'))
 
-      layers.summarize_tensors(v+f+difs)
+      layers.summarize_tensors(v + f + difs)
 
     self.log_weights = Function(log_weigths, async=True)
 
-    def log_returns(real_return: [], ret: [], qs):
-      layers.summarize_tensors([real_return, ret, qs, tf.subtract(ret, qs, name='R-Q')])
-
-    self.log_returns = Function(log_returns, async=True)
-
-  def run_training(self, T=10000000):
-    def player(env, test, name):
-
-      # logging
-      logger = Logger(name)
-      import logging
-      ch = logging.FileHandler(self.logdir + '/logs/' + name)
-      logger.addHandler(ch)
-      logger.setLevel(logging.DEBUG)
-      logger.info(name + ' starting')
-
-      t = 0
-      monitor = env if isinstance(env, Monitor) else None
-      ti = time()
-      for ep in range(1000000000):
-        ob = env.reset()
-        done = False
-        R = 0
-        ret = 0
-        annealing_time = 1000000
-        value_estimates = []
-        while not done:
-          # select actions according to epsilon-greedy policy
-          anneal = max(0, 1 - self.memory.t / annealing_time)
-          if not test and (self.memory.t < self.replay_start or np.random.rand() < 1 * anneal + .1):
-            a = np.random.randint(0, self.env.action_space.n)
-          else:
-            a, q = self.act(ob)
-            value_estimates.append(np.max(q))
-
-          ob2, r, done, info = env.step(a)
-
-          if not test:
-            self.memory.enqueue(ob, a, r, done, info)
-
-          ob = ob2
-
-          ret += r
-          R += info.get('unwrapped_reward', r)
-          t += 1
-
-        if test:
-          self.log_returns(R, ret, value_estimates)
-
-
-        logi = 5
-        if ep % logi == 0 and monitor:
-          assert isinstance(monitor, Monitor)
-          at = np.mean(monitor.get_episode_rewards()[-logi:])
-          ds = sum(monitor.get_episode_lengths()[-logi:])
-          dt = time() - ti
-
-          if test:
-            sleep(logi*60*0)
-
-          ti = time()
-          logger.info(f'av. return {at}, av. fps {ds/dt}')
-
-        if self.memory.t > T:
-          break
-
-    for i, e in enumerate(self.envs):
-      Thread(target=player, args=(e, i == 0, 'agent_' + str(i)), daemon=True, name=f'agent_{i}').start()
-
+  def train(self, timesteps=10000000, tter=.25):
     debugged = False
     t = 0
     wt = 0
-    while self.memory.t < T:
+    while self.memory.t < timesteps:
       train_debug = not debugged and self.memory.t > 512  # it is assumed the batch size is smaller than that
       debugged = debugged or train_debug
-      if (self.memory.t > self.replay_start and t < self.memory.t / 4) or train_debug:
+      curb = t > self.memory.t * tter
+      if (self.memory.t > self.replay_start and not curb) or train_debug:
 
         if t % 5000 == 0:
           print(f"{t} steps of training after {self.memory.t} steps of experience (idle for {wt*.1} s)")
           wt = 0
-        self.train()
+
+        self.train_step()
 
         if t % 50000 == 0:
           self.log_weights()
@@ -185,51 +119,61 @@ class AsyncDQNAgent:
         wt += 1
 
 
+class DQNAgent(Agent):
+  def __init__(self, dqn: DQN, env: gym.Env, episodes=1000000000, test=False, name=None, logdir=None):
+    super().__init__(env, episodes, name, logdir)
+    self.test = test
+    self.dqn = dqn
 
-# Tests
+    if test:
+      def log_returns(real_return: [], ret: [], qs):
+        layers.summarize_tensors([real_return, ret, qs, tf.subtract(ret, qs, name='R-Q')])
 
-def dqn_test(env='OneRoundDeterministicReward-v0'):
-  env = gym.make(env)
-  env = ObservationShapeWrapper(env)
+      self.log_returns = Function(log_returns, async=True)
 
-  @chi.model(tracker=tf.train.ExponentialMovingAverage(1-.01),
-             optimizer=tf.train.AdamOptimizer(.001))
-  def q_network(x):
-    x = layers.fully_connected(x, 32)
-    x = layers.fully_connected(x, env.action_space.n, activation_fn=None,
-                               weights_initializer=tf.random_normal_initializer(0, 1e-4))
-    return x
+  def action_generator(self):
+    monitor = get_wrapper(self.env, wrappers.Monitor)
+    dqn = self.dqn
+    t = 0
+    ti = time()
+    for ep in range(10000000000000):
+      done = False
+      R = 0
+      ret = 0
+      annealing_time = 1000000
+      value_estimates = []
+      ob = yield
+      while not done:
+        # select actions according to epsilon-greedy policy
+        anneal = max(0, 1 - dqn.memory.t / annealing_time)
+        if not self.test and (dqn.memory.t < dqn.replay_start or np.random.rand() < 1 * anneal + .1):
+          a = np.random.randint(0, dqn.n_actions)
+          q = None
+        else:
+          a, q = dqn.act(ob)
+          value_estimates.append(np.max(q))
 
-  agent = DqnAgent(env, q_network)
+        meta = {'action_values': q}
+        ob2, r, done, info = yield (a, meta)
 
-  for ep in range(4000):
-    R, _ = agent.play_episode()
+        if not self.test:
+          dqn.memory.enqueue(ob, a, r, done, info)
 
-    if ep % 100 == 0:
-      print(f'Return after episode {ep} is {R}')
+        ob = ob2
 
+        ret += r
+        R += info.get('unwrapped_reward', r)
+        t += 1
 
-def test_dqn():
-  with tf.Graph().as_default(), tf.Session().as_default():
-    dqn_test()  # optimal return = 1
+      if self.test:
+        self.log_returns(R, ret, value_estimates)
 
-  with tf.Graph().as_default(), tf.Session().as_default():
-    dqn_test('OneRoundNondeterministicReward-v0')  # optimal return = 1
+      logi = 5
+      if ep % logi == 0 and monitor:
+        assert isinstance(monitor, Monitor)
+        at = np.mean(monitor.get_episode_rewards()[-logi:])
+        ds = sum(monitor.get_episode_lengths()[-logi:])
+        dt = time() - ti
 
-  with tf.Graph().as_default(), tf.Session().as_default():
-    dqn_test('TwoRoundDeterministicReward-v0')  # optimal return = 3
-
-
-# Test Utils
-class ObservationShapeWrapper(gym.ObservationWrapper):
-  def __init__(self, env):
-    from gym.spaces import Box
-    super().__init__(env)
-    self.observation_space = Box(1, 1, [1])
-
-  def _observation(self, observation):
-    return [observation]
-
-if __name__ == '__main__':
-  chi.chi.tf_debug = True
-  test_dqn()
+        ti = time()
+        self.logger.info(f'av. return {at}, av. fps {ds/dt}')

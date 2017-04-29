@@ -75,6 +75,10 @@ class Function(SubGraph):
 
           # shapes = [p[2] for p in sig]
           queue = tf.FIFOQueue(capacity=self.prefetch_capacity, dtypes=dtypes)
+
+          qs = queue.size() # log queue size
+          tf.summary.scalar(qs.name, qs)
+
           enqueue_op = queue.enqueue(tf.py_func(pf, [], dtypes))
           qr = tf.train.QueueRunner(queue, [enqueue_op])
           tf.train.add_queue_runner(qr)
@@ -188,7 +192,7 @@ class Function(SubGraph):
     use_wrap = False  # automatically add batch dimension true and necessary
     for p, auto_wrap, arg in zip(self.inputs.values(), self.auto_wrap.values(), args):
       if auto_wrap:
-        arg = np.array(arg)
+        arg = np.asarray(arg)
         if p.get_shape().is_compatible_with(arg.shape):
           assert not use_wrap
         else:

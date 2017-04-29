@@ -4,6 +4,7 @@ http://www.nature.com/nature/journal/v518/n7540/full/nature14236.html
 """
 
 import chi
+import chi.rl.wrappers
 from chi.rl.dqn import DqnAgent
 from chi.rl.util import print_env
 from chi.util import run_parallel, log_top, log_nvidia_smi
@@ -26,8 +27,8 @@ def dqn_atari(logdir, env='Pong', memory_size=100000):
 
   env += 'NoFrameskip-v3'
   env = gym.make(env)
-  env = chi.rl.util.AtariWrapper(env)
-  env = chi.rl.util.StackFrames(env, 4)
+  env = chi.rl.wrappers.AtariWrapper(env)
+  env = chi.rl.wrappers.StackFrames(env, 4)
   env = wrappers.SkipWrapper(4)(env)
 
   test = 10
