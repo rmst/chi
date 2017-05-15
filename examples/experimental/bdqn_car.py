@@ -5,6 +5,7 @@ import chi
 import tensorflow as tf
 from chi import experiment, Experiment
 from chi.rl.async_dqn import DQN
+from chi.rl.bdqn import BootstrappedDQN
 from chi.rl.util import print_env, Plotter, draw
 from chi.rl.wrappers import DiscretizeActions
 from chi.util import log_top, log_nvidia_smi
@@ -18,7 +19,7 @@ def dqn_car(self: Experiment, logdir=None, frameskip=5,
             agents=3,
             replay_start=50000,
             tter=.25,
-            duelling=True):
+            n_heads=3):
   from tensorflow.contrib import layers
   import gym
   from gym import wrappers
@@ -50,6 +51,9 @@ def dqn_car(self: Experiment, logdir=None, frameskip=5,
       self.d = Plotter(next(ax), title='distance_from_road')
       self.td = Plotter(next(ax), title='td')
 
+      if mod:
+        self.mask = np.asarray(np.random.normal(0, 30, size=self.observation_space.shape), dtype=np.uint8)
+
     def _step(self, action):
       ob, r, done, info = super()._step(action)
       qs = self.meta.get('action_values', np.full(self.an, np.nan))
@@ -71,13 +75,13 @@ def dqn_car(self: Experiment, logdir=None, frameskip=5,
       f = super()._render(mode, close)
       # fs = [qp.draw() for qp in self.q_plotters]
       f2 = draw(self.f)
-      return chi.rl.util.concat_frames(f, self.obs, f2)
+      obs = np.tile(self.obs[:, :, np.newaxis], (1, 1, 3))
+      return chi.rl.util.concat_frames(f, obs, f2)
 
     def _observation(self, observation):
       if self.mod:
-        observation = np.asarray(np.random.normal(observation, 30), dtype=np.uint8)
-        np.clip(observation, 0, 255, observation)
-      self.obs = np.tile(observation[:, :, np.newaxis], (1, 1, 3))
+        np.clip(observation + self.mask, 0, 255, observation)
+      self.obs = observation
       return observation
 
   class ScaleRewards(gym.Wrapper):
@@ -98,7 +102,7 @@ def dqn_car(self: Experiment, logdir=None, frameskip=5,
     if i in (0, 1):
       env = RenderMeta(env, mod=i == 1)
     env = wrappers.Monitor(env, self.logdir + '/monitor_' + str(i),
-                           video_callable=lambda j: j % (5 if i in (0, 1) else 200) == 0)
+                           video_callable=lambda j: j % (20 if i in (0, 1) else 200) == 0)
 
     # env = wrappers.SkipWrapper(frameskip)(env)
     # env = ScaleRewards(env)
@@ -109,18 +113,21 @@ def dqn_car(self: Experiment, logdir=None, frameskip=5,
   env = envs[0]
   print_env(env)
 
-  if duelling:
-    # https://arxiv.org/abs/1511.06581
+  @chi.model(tracker=tf.train.ExponentialMovingAverage(1 - .0005),
+             optimizer=tf.train.RMSPropOptimizer(6.25e-5, .95, .95, .01))
+  def pp(x):
+    x /= 255
+    x = layers.conv2d(x, 32, 8, 4)
+    x = layers.conv2d(x, 64, 4, 2)
+    x = layers.conv2d(x, 64, 3, 1)
+    x = layers.flatten(x)
+    return x
 
-    @chi.model(tracker=tf.train.ExponentialMovingAverage(1 - .0005),  # TODO: replace with original weight freeze
-               optimizer=tf.train.RMSPropOptimizer(6.25e-5, .95, .95, .01))
-    def q_network(x):
-      x /= 255
-      x = layers.conv2d(x, 32, 8, 4)
-      x = layers.conv2d(x, 64, 4, 2)
-      x = layers.conv2d(x, 64, 3, 1)
-      x = layers.flatten(x)
-
+  @chi.model(tracker=tf.train.ExponentialMovingAverage(1 - .0005),
+             optimizer=tf.train.RMSPropOptimizer(6.25e-5, .95, .95, .01))
+  def heads(x):
+    qs = []
+    for _ in range(n_heads):
       xv = layers.fully_connected(x, 512)
       val = layers.fully_connected(xv, 1, activation_fn=None)
       # val = tf.squeeze(val, 1)
@@ -130,30 +137,19 @@ def dqn_car(self: Experiment, logdir=None, frameskip=5,
 
       q = val + adv - tf.reduce_mean(adv, axis=1, keep_dims=True)
       q = tf.identity(q, name='Q')
-      return q
-  else:
-    @chi.model(tracker=tf.train.ExponentialMovingAverage(1 - .0005),  # TODO: replace with original weight freeze
-               optimizer=tf.train.RMSPropOptimizer(.00025, .95, .95, .01))
-    def q_network(x):
-      x /= 255
-      x = layers.conv2d(x, 32, 8, 4)
-      x = layers.conv2d(x, 64, 4, 2)
-      x = layers.conv2d(x, 64, 3, 1)
-      x = layers.flatten(x)
-      x = layers.fully_connected(x, 512)
-      x = layers.fully_connected(x, env.action_space.n, activation_fn=None)
-      x = tf.identity(x, name='Q')
-      return x
+      qs.append(q)
 
-  dqn = DQN(env.action_space.n,
-            env.observation_space.shape,
-            q_network,
-            clip_td=False,
-            replay_start=replay_start,
-            logdir=logdir)
+    return qs
+
+  dqn = BootstrappedDQN(env.action_space.n,
+                        env.observation_space.shape,
+                        pp,
+                        heads,
+                        replay_start=replay_start,
+                        logdir=logdir)
 
   for i, env in enumerate(envs):
-    agent = dqn.make_agent(test=i in (0, 1), memory_size=memory_size // agents, logdir=logdir, name=f'Agent_{i}')
+    agent = dqn.make_agent(test=i in (0, 1), train=i != 1, memory_size=memory_size // (agents-1), logdir=logdir, name=f'Agent_{i}')
     agent.run(env, async=True)
 
   dqn.train(timesteps, tter)

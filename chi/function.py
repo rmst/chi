@@ -3,7 +3,7 @@ from threading import Thread
 
 import tensorflow as tf
 
-from chi.util import in_collections
+from chi.util import in_collections, apply_to_leaves
 from .subgraph import SubGraph
 from . import util
 import chi
@@ -23,7 +23,7 @@ class Function(SubGraph):
   """
 
   def __init__(self, f, logdir=None, logging_policy=None, scope=None,
-               prefetch_fctn=None, prefetch_capacity=1, async=False,
+               prefetch_fctn=None, prefetch_capacity=1, async=False, prefetch_threads=None,
                _experiment=None, _arg_spec=None):
     """
 
@@ -32,6 +32,7 @@ class Function(SubGraph):
     :param args:
     :param kwargs:
     """
+    self.prefetch_threads = prefetch_threads or prefetch_capacity
     self._arg_spec = _arg_spec
     self.prefetch_capacity = prefetch_capacity
     self.prefetch_fctn = prefetch_fctn
@@ -76,11 +77,11 @@ class Function(SubGraph):
           # shapes = [p[2] for p in sig]
           queue = tf.FIFOQueue(capacity=self.prefetch_capacity, dtypes=dtypes)
 
-          qs = queue.size() # log queue size
+          qs = queue.size()  # log queue size
           tf.summary.scalar(qs.name, qs)
 
           enqueue_op = queue.enqueue(tf.py_func(pf, [], dtypes))
-          qr = tf.train.QueueRunner(queue, [enqueue_op])
+          qr = tf.train.QueueRunner(queue, [enqueue_op] * self.prefetch_threads)
           tf.train.add_queue_runner(qr)
 
           dequeued_tensors = queue.dequeue()
@@ -210,10 +211,10 @@ class Function(SubGraph):
 
     if use_wrap:
       # remove batch dimension
-      if isinstance(results, (tuple, list)):
-        results = [r[0, ...] if r.shape[0] == 1 else r for r in results if isinstance(r, np.ndarray)]
-      else:
-        results = results[0, ...] if isinstance(results, np.ndarray) and results.shape[0] == 1 else results
+      def unwrap(r: np.ndarray):
+        return r[0, ...] if r.shape[0] == 1 else r
+
+      results = apply_to_leaves(results, unwrap)
 
     return results
 

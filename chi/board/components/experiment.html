@@ -274,7 +274,7 @@
 
           self.details = data
           self.jupyter = data.jupyter_port != -1
-          setTimeout(req_details, 7000)
+//          setTimeout(req_details, 7000)
         })
  			}
 
@@ -292,7 +292,7 @@
           console.log('got logs ' + data.length)
 
           self.logs = data
-          setTimeout(req_logs, 7000)
+//          setTimeout(req_logs, 7000)
         })
  			}
 
@@ -315,7 +315,7 @@
               // frame._empty = false
             }
           }
-          setTimeout(req_tb, 7000)
+          setTimeout(req_tb, 20000)
 
         });
       }

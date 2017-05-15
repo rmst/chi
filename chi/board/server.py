@@ -66,19 +66,9 @@ class Server(Namespace, Repo):
     os.symlink(os.path.expanduser('~/.bashrc'), bashrc)
     self.bashrc = bashrc
 
-
     self.connections = 0
     Repo.__init__(self, roots)
 
-    # Poll filesystem
-    # def scan():
-    #   while True:
-    #     self.experiments()
-    #     sleep(polling_interval)
-    #
-    # Thread(target=scan, daemon=True).start()
-
-    # Watch filesystem with inotify
     Repo.observer.start()
 
   def dispatch(self, event):
@@ -99,7 +89,6 @@ class Server(Namespace, Repo):
                            ))
 
     self.experiments()  # poll file system
-    # self.upd()
 
     self.connections += 1
     logger.debug(f'connect ({self.connections})')
@@ -143,7 +132,7 @@ class Server(Namespace, Repo):
       e = Experiment(path, self.host, self.port, self)
       self.exps.update({path: e})
       if self.socketio:
-        self.upd()
+        # self.upd()
         logger.debug(f'{len(self.exps)} experiments')
 
   def on_deleted(self, event):
@@ -156,7 +145,7 @@ class Server(Namespace, Repo):
         del self.exps[p]
         logger.debug('actually deleted exp')
       if self.socketio:
-        self.upd()
+        # self.upd()
         logger.debug(f'{len(self.exps)} experiments')
 
   def experiments(self):

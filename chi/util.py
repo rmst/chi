@@ -78,13 +78,15 @@ def output_redirect(stdout, stderr):
 
       def close(self):
         for log in self.logs():
-          self.flush_buffer()
+          # self.flush_buffer()
           getattr(log, 'close', lambda: None)()
 
     lsout = Logger(0)
     sys.stdout.write = lsout.write
+    sys.stdout.close = lsout.close
     lserr = Logger(1)
     sys.stderr.write = lserr.write
+    sys.stderr.close = lserr.close
 
   # print('red ', threading.current_thread())
   thread = threading.current_thread()
@@ -106,7 +108,7 @@ def image_summary_encoded(name, data):
   More info:
   https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
   """
-  v = tf.Summary.Value(node_name=name, image=tf.Summary.Image(encoded_image_string=data))
+  v = tf.Summary.Value(node_name=name, tag=name, image=tf.Summary.Image(encoded_image_string=data))
   s = tf.Summary(value=[v])
   return s
 
@@ -151,7 +153,12 @@ def shape_from_annotation(an: collections.Iterable):
 
 
 def in_collections(var):
-  return [k for k in tf.get_default_graph().get_all_collection_keys() if var in tf.get_collection(k)]
+  from chi.logger import logger
+  import logging
+  if logger.level == logging.DEBUG:
+    return [k for k in tf.get_default_graph().get_all_collection_keys() if var in tf.get_collection(k)]
+  else:
+    return []
 
 
 def basename(name):
@@ -390,3 +397,9 @@ class Config:
   def release(self):
     fcntl.flock(self._f, fcntl.LOCK_UN)
     self._f.close()
+
+
+def scalar_summaries(prefix='', **kwargs):
+  vs = [tf.Summary.Value(tag=prefix + '/' + name, simple_value=value) for name, value in kwargs.items()]
+  s = tf.Summary(value=vs)
+  return s

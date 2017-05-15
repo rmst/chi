@@ -109,8 +109,15 @@ def chiboard(self: chi.Experiment, host='localhost', port=MAGIC_PORT, rootdir=''
   @app.route("/logs/<path:path>")
   def logs(path):
     data = []
-    for p in rcollect(expanduser(path) + '/logs', 0):
-      with open(p, 'r') as f:
+
+    def key(x):
+      k = '_' if x == 'stdout' else x
+      return k
+
+    path = expanduser(path) + '/logs'
+
+    for p in sorted(os.listdir(path), key=key):
+      with open(path + '/' + p, 'r') as f:
         f.seek(0, os.SEEK_END)
         l = f.tell()
         f.seek(max((0, l - 50000)), 0)

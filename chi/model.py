@@ -112,8 +112,8 @@ class Model(SubGraph):
     out = apply_to_leaves(sg.output, lambda x: tf.stop_gradient(x) if isinstance(x, tf.Tensor) else x)
     return out
 
-  def minimize(self, losses, name=None, collections=None, **kwargs):
-    with tf.name_scope('minimize'):
+  def compute_gradients(self, losses, name=None, collections=None):
+    with tf.name_scope('compute_gradients'):
       assert isinstance(self.optimizer, tf.train.Optimizer)
       if not isinstance(losses, (list, tuple)):
         losses = [losses]
@@ -136,22 +136,38 @@ class Model(SubGraph):
         for g, v in gav:
           tf.add_to_collection('chi_gradients', g)
 
-        with tf.variable_scope(self._scope):
-          sg = SubGraph(lambda: self.optimizer.apply_gradients(gav, name='apply_gradients'), default_name='minimize')
+      else:
+        gav = []
+
+      return gav
+
+  def apply_gradients(self, grads_and_vars):
+    with tf.name_scope('apply_gradients'):
+
+      with tf.variable_scope(self._scope):
+
+        if grads_and_vars:
+          sg = SubGraph(lambda: self.optimizer.apply_gradients(grads_and_vars, name='apply_gradients'), default_name='minimize')
           sg.initialize()
           minimize = sg.output
-      else:
-        minimize = tf.no_op()
 
-      # self.after_update += self.update_ops()
+        else:
+          minimize = tf.no_op()
 
-      logger.info(f'"{self.name}" updating after optimization step:\n' +
-                  '\n'.join([f'  {v.name} - {in_collections(v)}' for v in self.after_update]) + '\n')
+        # self.after_update += self.update_ops()
 
-      with tf.control_dependencies([minimize]):
-        assert isinstance(self._first_graph, SubGraph)
-        out = tf.tuple([loss], control_inputs=self.after_update, name='after_update')
-        return out[0]
+        logger.info(f'"{self.name}" updating after optimization step:\n' +
+                    '\n'.join([f'  {v.name} - {in_collections(v)}' for v in self.after_update]) + '\n')
+
+        with tf.control_dependencies([minimize]):
+          assert isinstance(self._first_graph, SubGraph)
+          out = tf.group(*self.after_update, name='after_update')
+          return out
+
+  def minimize(self, losses, name=None, collections=None, **kwargs):
+    gav = self.compute_gradients(losses, name, collections)
+    apply = self.apply_gradients(gav)
+    return apply
 
   def get_collection(self, name):
     assert self._last_graph

@@ -31,13 +31,14 @@ plt.switch_backend('agg')
 
 
 class Plotter:
-  def __init__(self, axes, timesteps=20, limits=None, title="", legend=()):
+  def __init__(self, axes: plt.Axes, timesteps=20, limits=None, auto_limit=6, title="", legend=()):
+    self.auto_limit = auto_limit
     self.legend = legend
     self.x = []
     self.timesteps = timesteps
     self.limits = limits
     self.lines = []
-    self.ax: plt.Axes = axes
+    self.ax = axes
     self.ax.set_title(title)
     self.ax.set_xlim(-self.timesteps, 0)
     self.mean = 0
@@ -73,7 +74,7 @@ class Plotter:
         for i, line in enumerate(self.lines):
           line.set_data(self.x, y[:, i])
 
-      limits = self.limits or (self.mean - 4*np.sqrt(self.var), self.mean + 4*np.sqrt(self.var))
+      limits = self.limits or (self.mean - self.auto_limit * np.sqrt(self.var), self.mean + self.auto_limit * np.sqrt(self.var))
       self.ax.set_ylim(*limits)
       # self.ax.relim()
       # self.ax.autoscale_view()
@@ -83,7 +84,6 @@ def draw(figure):
   figure.canvas.draw()
   data = np.fromstring(figure.canvas.tostring_rgb(), dtype=np.uint8, sep='')
   frame = data.reshape(figure.canvas.get_width_height()[::-1] + (3,))
-
   return frame
 
 

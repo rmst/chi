@@ -35,6 +35,27 @@ class DQN:
     self.discount = .99
     self.step = 0
 
+    @chi.model(tracker=tf.train.ExponentialMovingAverage(1 - .0005),  # TODO: replace with original weight freeze
+               optimizer=tf.train.RMSPropOptimizer(6.25e-5, .95, .95, .01))
+    def q_network(x):
+      x /= 255
+      x = layers.conv2d(x, 32, 8, 4)
+      x = layers.conv2d(x, 64, 4, 2)
+      x = layers.conv2d(x, 64, 3, 1)
+      x = layers.flatten(x)
+
+      xv = layers.fully_connected(x, 512)
+      val = layers.fully_connected(xv, 1, activation_fn=None)
+      # val = tf.squeeze(val, 1)
+
+      xa = layers.fully_connected(x, 512)
+      adv = layers.fully_connected(xa, env.action_space.n, activation_fn=None)
+
+      q = val + adv - tf.reduce_mean(adv, axis=1, keep_dims=True)
+      q = tf.identity(q, name='Q')
+      return q, x
+
+
     def act(x: [observation_shape]):
       qs = q_network(x)
       a = tf.argmax(qs, axis=1)

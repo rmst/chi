@@ -17,7 +17,8 @@ class DqnAgent:
     Deep Reinforcement Learning with Double Q-learning
     https://arxiv.org/abs/1509.06461
   """
-  def __init__(self, env: gym.Env, q_network: chi.Model, memory=None, double_dqn=True, replay_start=50000):
+  def __init__(self, env: gym.Env, q_network: chi.Model, memory=None, double_dqn=True, replay_start=50000, annealing_time=1000000):
+    self.annealing_time = annealing_time
     self.replay_start = replay_start
     so = env.observation_space.shape
 
@@ -107,7 +108,7 @@ class DqnAgent:
 
     while not done:
       # select actions according to epsilon-greedy policy
-      anneal = max(0, 1 - self.t / annealing_time)
+      anneal = max(0, 1 - self.t / self.annealing_time)
       if not test and (self.t < self.replay_start or np.random.rand() < 1 * anneal + .1):
         a = np.random.randint(0, self.env.action_space.n)
       else:
@@ -146,31 +147,35 @@ def dqn_test(env='OneRoundDeterministicReward-v0'):
   env = ObservationShapeWrapper(env)
 
   @chi.model(tracker=tf.train.ExponentialMovingAverage(1-.01),
-             optimizer=tf.train.AdamOptimizer(.001))
+             optimizer=tf.train.AdamOptimizer(.01))
   def q_network(x):
     x = layers.fully_connected(x, 32)
     x = layers.fully_connected(x, env.action_space.n, activation_fn=None,
                                weights_initializer=tf.random_normal_initializer(0, 1e-4))
     return x
 
-  agent = DqnAgent(env, q_network)
+  agent = DqnAgent(env, q_network, double_dqn=False, replay_start=100, annealing_time=100)
 
-  for ep in range(4000):
-    R, _ = agent.play_episode()
+  rs = []
+  for ep in range(10000):
+    r, _ = agent.play_episode()
+
+    rs.append(r)
 
     if ep % 100 == 0:
-      print(f'Return after episode {ep} is {R}')
+      print(f'Return after episode {ep} is {sum(rs)/len(rs)}')
+      rs = []
 
 
 def test_dqn():
   with tf.Graph().as_default(), tf.Session().as_default():
-    dqn_test()  # optimal return = 1
+    dqn_test()  # optimal expected return = 1
 
   with tf.Graph().as_default(), tf.Session().as_default():
-    dqn_test('OneRoundNondeterministicReward-v0')  # optimal return = 1
+    dqn_test('OneRoundNondeterministicReward-v0')  # optimal expected return = 2.5
 
   with tf.Graph().as_default(), tf.Session().as_default():
-    dqn_test('TwoRoundDeterministicReward-v0')  # optimal return = 3
+    dqn_test('TwoRoundDeterministicReward-v0')  # optimal expected return = 3
 
 
 # Test Utils

@@ -3,6 +3,44 @@ import numpy as np
 from chi.rl.util import ReadWriteLock
 
 
+class ShardedMemory:
+  def __init__(self):
+    self.children = []
+
+  @property
+  def t(self):
+    return sum(c.t for c in self.children)
+
+  def sample_batch(self, size=32):
+    c = len(self.children)
+    idx = np.random.randint(0, c, size)
+    ns = np.bincount(idx, minlength=c)
+
+    o = []
+    a = []
+    r = []
+    t = []
+    o2 = []
+    info = []
+
+    for i, n in enumerate(ns):
+      if n != 0:
+        sample = self.children[i].sample_batch(n)
+        o.append(sample[0])
+        a.append(sample[1])
+        r.append(sample[2])
+        t.append(sample[3])
+        o2.append(sample[4])
+        info.append(sample[5])
+
+    return (np.concatenate(o),
+            np.concatenate(a),
+            np.concatenate(r),
+            np.concatenate(t),
+            np.concatenate(o2),
+            np.concatenate(info))
+
+
 class ReplayMemory:
   def __init__(self, size, batch_size=64):
     self.lock = ReadWriteLock()
@@ -16,13 +54,13 @@ class ReplayMemory:
     self.batch_size = batch_size
 
     self.n = 0
-    self.i = -1
-    self.t = -1
+    self.i = 0
+    self.t = 0
 
   def reset(self):
     self.n = 0
-    self.i = -1
-    self.t = -1
+    self.i = 0
+    self.t = 0
 
   def enqueue(self, observation, action, reward, terminal, info=None):
     with self.lock.write():
@@ -33,9 +71,6 @@ class ReplayMemory:
         self.actions = np.empty((self.size,) + aa.shape, dtype=aa.dtype)
         self.init = True
 
-      self.i = (self.i + 1) % self.size
-      self.t = self.t + 1
-
       self.observations[self.i, ...] = observation
       self.terminals[self.i] = terminal  # tells whether this observation is the last
 
@@ -45,11 +80,15 @@ class ReplayMemory:
       self.info[self.i] = info
 
       self.n = min(self.size, self.n + 1)
+      self.i = (self.i + 1) % self.size
+      self.t += 1
 
   def sample_batch(self, size=None):
     with self.lock.read():
+
       size = size or self.batch_size
-      assert self.n-1 > size
+      if size:
+        assert self.n-1 > size
       indices = np.random.randint(0, self.n - 1, size)
 
       o = self.observations[indices, ...]
