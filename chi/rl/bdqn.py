@@ -179,17 +179,20 @@ class BootstrappedDQN:
 
         qs.append(q[head][action])
 
-        smse = np.mean(np.square(sp-s))
-        sp = self.predict(s, action)
+        meta = {}
+        if test:
+          sm = np.mean(s)
+          smse = np.mean(np.square(sp-s))
+          sp = self.predict(s, action)
 
-        aqs = [q[h][action] for h in range(self.n_heads)]
-        mq = np.mean(aqs)
-        vq = np.mean(np.square(aqs - mq))
-        td = qs[-2] - (rewards[-1] - self.discount * qs[-1]) if len(qs) > 1 else 0
-        meta = {'action_values': q[head], 'mq': mq, 'vq': vq, 'smse': smse, 'td': td}
+          aqs = [q[h][action] for h in range(self.n_heads)]
+          mq = np.mean(aqs)
+          vq = np.mean(np.square(aqs - mq))
+          td = qs[-2] - (rewards[-1] - self.discount * qs[-1]) if len(qs) > 1 else 0
+          meta.update({'action_values': q[head], 'mq': mq, 'vq': vq, 'smse': smse, 'td': td})
 
-        if writer:
-          writer.add_summary(scalar_summaries(prefix='stats', mq=mq, vq=vq, smse=smse, td=td), self.memory.t)
+          if writer:
+            writer.add_summary(scalar_summaries(prefix='stats', mq=mq, vq=vq, sm=sm, smse=smse, td=td), self.step)
 
         ob2, r, done, info = yield action, meta  # return action and meta information and receive environment outputs
 

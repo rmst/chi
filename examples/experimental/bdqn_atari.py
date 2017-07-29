@@ -77,9 +77,13 @@ def dqn_atari(self: Experiment, logdir=None, env='Pong', frameskip=4,
       return observation
 
   class NoiseWrapper(chi.rl.Wrapper):
+    def _reset(self):
+      self.mask = np.asarray(np.random.normal(0, 20, size=self.observation_space.shape), dtype=np.uint8)
+
+      return super()._reset()
+
     def _observation(self, observation):
-      observation = np.asarray(np.random.normal(observation, 20), dtype=np.uint8)
-      np.clip(observation, 0, 255, observation)
+      np.clip(observation + self.mask, 0, 255, observation)
       return observation
 
   env_name = env  # no clue why this is necessary
@@ -143,7 +147,7 @@ def dqn_atari(self: Experiment, logdir=None, env='Pong', frameskip=4,
                         logdir=logdir)
 
   for i, env in enumerate(envs):
-    agent = dqn.make_agent(test=i in (0, 1), memory_size=memory_size // (agents-2), logdir=logdir, name=f'Agent_{i}')
+    agent = dqn.make_agent(test=i in (0, 1), train=i != 1, memory_size=memory_size // (agents-1), logdir=logdir, name=f'Agent_{i}')
     agent.run(env, async=True)
 
   dqn.train(timesteps, tter)
