@@ -6,7 +6,6 @@ import sys
 import time
 from os.path import join
 
-import tensorflow as tf
 from contextlib import contextmanager
 
 import inspect
@@ -15,7 +14,6 @@ import collections
 import numpy as np
 
 from chi.logger import logger
-from .ops import after
 
 
 def apply_to_leaves(obj, fun):
@@ -103,62 +101,62 @@ def output_redirect(stdout, stderr):
 
 
 
-def image_summary_encoded(name, data):
-  """
-  More info:
-  https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
-  """
-  v = tf.Summary.Value(node_name=name, tag=name, image=tf.Summary.Image(encoded_image_string=data))
-  s = tf.Summary(value=[v])
-  return s
+# def image_summary_encoded(name, data):
+#   """
+#   More info:
+#   https://github.com/tensorflow/tensorflow/blob/master/tensorflow/core/framework/summary.proto
+#   """
+#   v = tf.Summary.Value(node_name=name, tag=name, image=tf.Summary.Image(encoded_image_string=data))
+#   s = tf.Summary(value=[v])
+#   return s
 
 
-def ClippingOptimizer(opt: tf.train.Optimizer, low, high):
-  original = opt.apply_gradients
+# def ClippingOptimizer(opt: tf.train.Optimizer, low, high):
+#   original = opt.apply_gradients
 
-  def apply_gradients(grads_and_vars, *a, **kw):
-    app = original(grads_and_vars, *a, **kw)
-    with tf.name_scope('clip'):
-      # clip = [v.assign_add(tf.maximum(high-v, 0)+tf.minimum(low-v, 0)) for g, v in grads_and_vars]
-      clip = [v.assign(tf.clip_by_value(v, low, high)) for g, v in grads_and_vars]
+#   def apply_gradients(grads_and_vars, *a, **kw):
+#     app = original(grads_and_vars, *a, **kw)
+#     with tf.name_scope('clip'):
+#       # clip = [v.assign_add(tf.maximum(high-v, 0)+tf.minimum(low-v, 0)) for g, v in grads_and_vars]
+#       clip = [v.assign(tf.clip_by_value(v, low, high)) for g, v in grads_and_vars]
 
-    step = after(app, clip, name='step')
-    return step
+#     step = after(app, clip, name='step')
+#     return step
 
-  opt.apply_gradients = apply_gradients
-  return opt
-
-
-def type_and_shape_from_annotation(an):
-  if isinstance(an, tf.DType):
-    return tf.as_dtype(an), None  # e.g.: myfun(x: float)
-  elif isinstance(an, collections.Iterable):
-    an = tuple(an)
-    if len(an) > 0 and isinstance(an[0], tf.DType):
-      shape = shape_from_annotation(an[1])
-      return tf.as_dtype(an[0]), shape  # e.g.: myfun(x: [float, (3, 5)])
-    else:
-      shape = shape_from_annotation(an)
-      return tf.float32, shape  # e.g.: myfun(x: (3, 5))
-  else:
-    raise ValueError('Can not interpret annotation')
+#   opt.apply_gradients = apply_gradients
+#   return opt
 
 
-def shape_from_annotation(an: collections.Iterable):
-  an = tuple(an)
-  if len(an) > 0 and isinstance(an[0], collections.Iterable):
-    return [None, *an[0]]  # e.g.: myfun(x: [[3, 5]])  # will be used for automatic batch dimension
-  else:
-    return an  # e.g.: myfun(x: (3, 5))  # return as tuple
+# def type_and_shape_from_annotation(an):
+#   if isinstance(an, tf.DType):
+#     return tf.as_dtype(an), None  # e.g.: myfun(x: float)
+#   elif isinstance(an, collections.Iterable):
+#     an = tuple(an)
+#     if len(an) > 0 and isinstance(an[0], tf.DType):
+#       shape = shape_from_annotation(an[1])
+#       return tf.as_dtype(an[0]), shape  # e.g.: myfun(x: [float, (3, 5)])
+#     else:
+#       shape = shape_from_annotation(an)
+#       return tf.float32, shape  # e.g.: myfun(x: (3, 5))
+#   else:
+#     raise ValueError('Can not interpret annotation')
 
 
-def in_collections(var):
-  from chi.logger import logger
-  import logging
-  if logger.level == logging.DEBUG:
-    return [k for k in tf.get_default_graph().get_all_collection_keys() if var in tf.get_collection(k)]
-  else:
-    return []
+# def shape_from_annotation(an: collections.Iterable):
+#   an = tuple(an)
+#   if len(an) > 0 and isinstance(an[0], collections.Iterable):
+#     return [None, *an[0]]  # e.g.: myfun(x: [[3, 5]])  # will be used for automatic batch dimension
+#   else:
+#     return an  # e.g.: myfun(x: (3, 5))  # return as tuple
+
+
+# def in_collections(var):
+#   from chi.logger import logger
+#   import logging
+#   if logger.level == logging.DEBUG:
+#     return [k for k in tf.get_default_graph().get_all_collection_keys() if var in tf.get_collection(k)]
+#   else:
+#     return []
 
 
 def basename(name):
@@ -272,7 +270,7 @@ def seed(self):
   self.flags.seed = self.flags.seed or np.random.randint(1000000)
   random.seed(self.flags.seed)
   np.random.seed(self.flags.seed)
-  tf.set_random_seed(self.flags.seed)
+  # tf.set_random_seed(self.flags.seed)
 
 
 def remote_install_dependency(address, module):
@@ -399,7 +397,7 @@ class Config:
     self._f.close()
 
 
-def scalar_summaries(prefix='', **kwargs):
-  vs = [tf.Summary.Value(tag=prefix + '/' + name, simple_value=value) for name, value in kwargs.items()]
-  s = tf.Summary(value=vs)
-  return s
+# def scalar_summaries(prefix='', **kwargs):
+#   vs = [tf.Summary.Value(tag=prefix + '/' + name, simple_value=value) for name, value in kwargs.items()]
+#   s = tf.Summary(value=vs)
+#   return s

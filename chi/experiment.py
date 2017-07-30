@@ -8,7 +8,6 @@ from datetime import datetime
 import chi
 from chi.util import expanduser, join, rmr, mkdirs, run_daemon, Config
 from .app import App, SigtermException
-from .function import Function
 from .logger import logger, capture_std
 
 CONFIG_NAME = 'chi_experiment.json'
@@ -139,18 +138,17 @@ class Experiment(App):
       copy(script, self.logdir)
 
       # noinspection PyArgumentList
-      with Function(logdir=self.logdir, _experiment=self):  # TODO: use explicit context manager instead
-        try:
-          result = super()._run(**kwargs)
-          self.config.update(end='success')
-        except KeyboardInterrupt:
-          self.config.update(end='sigint')
-          raise
-        except SigtermException:
-          self.config.update(end='sigterm')
-          raise
-        finally:
-          self.config.update(status='dead', t_end=time.time())
+      try:
+        result = super()._run(**kwargs)
+        self.config.update(end='success')
+      except KeyboardInterrupt:
+        self.config.update(end='sigint')
+        raise
+      except SigtermException:
+        self.config.update(end='sigterm')
+        raise
+      finally:
+        self.config.update(status='dead', t_end=time.time())
 
       return result
 
