@@ -6,7 +6,7 @@ from gym.wrappers import Monitor
 
 import chi
 import tensortools as tt
-from chi_rl import get_wrapper
+from chi.rl.wrappers import get_wrapper
 from tensortools.util import output_redirect
 
 from time import time
@@ -47,7 +47,7 @@ class Agent:
 
     def run_episode(self, env: gym.Env):
 
-        meta_wrapper = get_wrapper(env, .wrappers.Wrapper)
+        meta_wrapper = get_wrapper(env, chi.rl.wrappers.Wrapper)
 
         done = False
         ob = env.reset()

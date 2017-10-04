@@ -1,6 +1,8 @@
+# issue in tensortools
 from time import sleep
 
 import chi
+from chi.rl.memory import ReplayMemory
 import tensortools as tt
 import numpy as np
 import gym
@@ -24,7 +26,7 @@ class DqnAgent:
         so = env.observation_space.shape
 
         self.env = env
-        self.memory = memory or chi.rl.ReplayMemory(1000000)
+        self.memory = memory or ReplayMemory(1000000)
 
         def act(x: [so]):
             qs = q_network(x)
@@ -190,5 +192,5 @@ class ObservationShapeWrapper(gym.ObservationWrapper):
         return [observation]
 
 if __name__ == '__main__':
-    tt.tensortools.tf_debug = True
+    tt.tf_debug = True
     test_dqn()
